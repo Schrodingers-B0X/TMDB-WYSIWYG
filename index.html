@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>TMDB Layout Editor V2</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      font-family: 'Inter', sans-serif;
+    }
+    /* Custom scrollbar for a polished look */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #1e293b; /* slate-800 */
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #475569; /* slate-600 */
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #64748b; /* slate-500 */
+    }
+    /* Hide number input spinners */
+    input[type='number']::-webkit-inner-spin-button,
+    input[type='number']::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type='number'] {
+      -moz-appearance: textfield;
+    }
+  </style>
+<script type="importmap">
+{
+  "imports": {
+    "rxjs": "https://aistudiocdn.com/rxjs@^7.8.2?conditions=es2015",
+    "rxjs/operators": "https://aistudiocdn.com/rxjs@^7.8.2/operators?conditions=es2015",
+    "rxjs/ajax": "https://aistudiocdn.com/rxjs@^7.8.2/ajax?conditions=es2015",
+    "rxjs/webSocket": "https://aistudiocdn.com/rxjs@^7.8.2/webSocket?conditions=es2015",
+    "rxjs/testing": "https://aistudiocdn.com/rxjs@^7.8.2/testing?conditions=es2015",
+    "rxjs/fetch": "https://aistudiocdn.com/rxjs@^7.8.2/fetch?conditions=es2015",
+    "@angular/platform-browser": "https://next.esm.sh/@angular/platform-browser@^20.3.12?external=rxjs",
+    "@angular/compiler": "https://next.esm.sh/@angular/compiler@^20.3.12?external=rxjs",
+    "@angular/common": "https://next.esm.sh/@angular/common@^20.3.12?external=rxjs",
+    "@angular/common/http": "https://next.esm.sh/@angular/common@^20.3.12/http?external=rxjs",
+    "@angular/core": "https://next.esm.sh/@angular/core@^20.3.12?external=rxjs",
+    "@angular/forms": "https://next.esm.sh/@angular/forms@^20.3.12?external=rxjs",
+    "@vercel/analytics": "https://next.esm.sh/@vercel/analytics@^1.5.0?external=rxjs"
+  }
+}
+</script>
+</head>
+<body class="bg-slate-900 text-slate-300 antialiased">
+  <app-root></app-root>
+</body>
+</html>

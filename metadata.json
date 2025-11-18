@@ -1,0 +1,5 @@
+{
+  "name": "TMDB Layout Editor",
+  "description": "A powerful WYSIWYG editor to create dynamic movie layouts for mobile, tablet, and TV using The Movie Database (TMDB) API. Design visually and export a single, self-contained PHP file ready for any web view.",
+  "requestFramePermissions": []
+}
