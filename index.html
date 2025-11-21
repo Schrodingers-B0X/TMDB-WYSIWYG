@@ -2,6 +2,24 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <script>
+    // Dynamic Base Tag: Fixes subdirectory deployment issues (e.g. /tmdb_editor/)
+    // 1. Get the current path (e.g. "/tmdb_editor/" or "/tmdb_editor/index.html")
+    var base = window.location.pathname;
+    
+    // 2. If it refers to a file (has extension), strip the filename to get the directory
+    if (base.indexOf('.') !== -1) {
+        base = base.substring(0, base.lastIndexOf('/') + 1);
+    }
+    
+    // 3. Ensure it ends with a slash (crucial for relative paths like ./src/...)
+    if (!base.endsWith('/')) {
+        base += '/';
+    }
+    
+    // 4. Inject the base tag
+    document.write('<base href="' + base + '" />');
+  </script>
   <title>TMDB Layout Editor V4</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -20,14 +38,14 @@
       height: 8px;
     }
     ::-webkit-scrollbar-track {
-      background: #1e293b; /* slate-800 */
+      background: #0d253f; /* TMDB Dark Blue */
     }
     ::-webkit-scrollbar-thumb {
-      background: #475569; /* slate-600 */
+      background: #254261; 
       border-radius: 4px;
     }
     ::-webkit-scrollbar-thumb:hover {
-      background: #64748b; /* slate-500 */
+      background: #395b80; 
     }
     /* Hide number input spinners */
     input[type='number']::-webkit-inner-spin-button,
@@ -59,7 +77,7 @@
 }
 </script>
 </head>
-<body class="bg-slate-900 text-slate-300 antialiased">
+<body class="bg-[#0d253f] text-slate-300 antialiased">
   <app-root></app-root>
 </body>
 </html>

@@ -1,40 +1,39 @@
-
 <!-- Context Menu -->
 @if (contextMenu().visible) {
-  <div class="fixed z-[10001] bg-slate-900 border border-slate-700 rounded-lg shadow-2xl text-slate-200 text-sm py-1 w-56 overflow-visible animate-[fadeIn_0.1s_ease-out]"
+  <div class="fixed z-[10001] bg-[#06121e] border border-[#254261] rounded-lg shadow-2xl text-slate-200 text-sm py-1 w-56 overflow-visible animate-[fadeIn_0.1s_ease-out]"
        [style.left.px]="contextMenu().x"
        [style.top.px]="contextMenu().y"
        (click)="$event.stopPropagation()">
     
-    <div class="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-800 mb-1">Actions</div>
+    <div class="px-3 py-2 text-xs font-semibold text-[#8eaec4] uppercase tracking-wider border-b border-[#254261] mb-1">Actions</div>
     
-    <button (click)="duplicateElement(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-indigo-600 hover:text-white transition-colors"><i class="fa-solid fa-copy w-4 text-center"></i> Duplicate</button>
-    <button (click)="copyStyles(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-indigo-600 hover:text-white transition-colors"><i class="fa-solid fa-palette w-4 text-center"></i> Copy Styles</button>
-    <button (click)="pasteStyles(contextMenu().elementId!)" [disabled]="!copiedStyles()" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-indigo-600 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-paste w-4 text-center"></i> Paste Styles</button>
+    <button (click)="duplicateElement(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors"><i class="fa-solid fa-copy w-4 text-center"></i> Duplicate</button>
+    <button (click)="copyStyles(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors"><i class="fa-solid fa-palette w-4 text-center"></i> Copy Styles</button>
+    <button (click)="pasteStyles(contextMenu().elementId!)" [disabled]="!copiedStyles()" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-paste w-4 text-center"></i> Paste Styles</button>
     
-    <div class="my-1 border-t border-slate-800"></div>
+    <div class="my-1 border-t border-[#254261]"></div>
     
     <!-- Align Submenu -->
     <div class="relative group/align">
-       <button class="w-full flex items-center justify-between text-left px-4 py-2 hover:bg-indigo-600 hover:text-white transition-colors">
+       <button class="w-full flex items-center justify-between text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors">
          <span class="flex items-center gap-3"><i class="fa-solid fa-object-group w-4 text-center"></i> Align</span>
          <i class="fa-solid fa-chevron-right text-[10px]"></i>
        </button>
-       <!-- Submenu Container with overlap bridge -->
+       <!-- Submenu Container -->
        <div class="absolute left-full top-0 ml-[-4px] pl-1 w-48 hidden group-hover/align:block">
-           <div class="bg-slate-900 border border-slate-700 rounded-lg shadow-xl py-1">
-               <button (click)="alignElement(contextMenu().elementId!, 'center')" class="w-full text-left px-4 py-2 hover:bg-indigo-600 hover:text-white text-xs">Center (XY)</button>
-               <button (click)="alignElement(contextMenu().elementId!, 'centerH')" class="w-full text-left px-4 py-2 hover:bg-indigo-600 hover:text-white text-xs">Center Horizontal</button>
-               <button (click)="alignElement(contextMenu().elementId!, 'centerV')" class="w-full text-left px-4 py-2 hover:bg-indigo-600 hover:text-white text-xs">Center Vertical</button>
-               <div class="my-1 border-t border-slate-800"></div>
-               <button (click)="alignElement(contextMenu().elementId!, 'top')" class="w-full text-left px-4 py-2 hover:bg-indigo-600 hover:text-white text-xs">Align Top</button>
-               <button (click)="alignElement(contextMenu().elementId!, 'bottom')" class="w-full text-left px-4 py-2 hover:bg-indigo-600 hover:text-white text-xs">Align Bottom</button>
-               <button (click)="alignElement(contextMenu().elementId!, 'left')" class="w-full text-left px-4 py-2 hover:bg-indigo-600 hover:text-white text-xs">Align Left</button>
-               <button (click)="alignElement(contextMenu().elementId!, 'right')" class="w-full text-left px-4 py-2 hover:bg-indigo-600 hover:text-white text-xs">Align Right</button>
-               <div class="my-1 border-t border-slate-800"></div>
-               <button (click)="alignElement(contextMenu().elementId!, 'fill')" class="w-full text-left px-4 py-2 hover:bg-indigo-600 hover:text-white text-xs">Stretch to Canvas</button>
-               <button (click)="alignElement(contextMenu().elementId!, 'fitW')" class="w-full text-left px-4 py-2 hover:bg-indigo-600 hover:text-white text-xs">Stretch Width</button>
-               <button (click)="alignElement(contextMenu().elementId!, 'fitH')" class="w-full text-left px-4 py-2 hover:bg-indigo-600 hover:text-white text-xs">Stretch Height</button>
+           <div class="bg-[#06121e] border border-[#254261] rounded-lg shadow-xl py-1">
+               <button (click)="alignElement(contextMenu().elementId!, 'center')" class="w-full text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] text-xs">Center (XY)</button>
+               <button (click)="alignElement(contextMenu().elementId!, 'centerH')" class="w-full text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] text-xs">Center Horizontal</button>
+               <button (click)="alignElement(contextMenu().elementId!, 'centerV')" class="w-full text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] text-xs">Center Vertical</button>
+               <div class="my-1 border-t border-[#254261]"></div>
+               <button (click)="alignElement(contextMenu().elementId!, 'top')" class="w-full text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] text-xs">Align Top</button>
+               <button (click)="alignElement(contextMenu().elementId!, 'bottom')" class="w-full text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] text-xs">Align Bottom</button>
+               <button (click)="alignElement(contextMenu().elementId!, 'left')" class="w-full text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] text-xs">Align Left</button>
+               <button (click)="alignElement(contextMenu().elementId!, 'right')" class="w-full text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] text-xs">Align Right</button>
+               <div class="my-1 border-t border-[#254261]"></div>
+               <button (click)="alignElement(contextMenu().elementId!, 'fill')" class="w-full text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] text-xs">Stretch to Canvas</button>
+               <button (click)="alignElement(contextMenu().elementId!, 'fitW')" class="w-full text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] text-xs">Stretch Width</button>
+               <button (click)="alignElement(contextMenu().elementId!, 'fitH')" class="w-full text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] text-xs">Stretch Height</button>
            </div>
        </div>
     </div>
@@ -42,45 +41,43 @@
     <!-- Image Fit Submenu -->
     @if (isImageElement(contextMenu().elementId)) {
         <div class="relative group/image">
-           <button class="w-full flex items-center justify-between text-left px-4 py-2 hover:bg-indigo-600 hover:text-white transition-colors">
+           <button class="w-full flex items-center justify-between text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors">
              <span class="flex items-center gap-3"><i class="fa-regular fa-image w-4 text-center"></i> Image Fit</span>
              <i class="fa-solid fa-chevron-right text-[10px]"></i>
            </button>
            <div class="absolute left-full top-0 ml-[-4px] pl-1 w-40 hidden group-hover/image:block">
-               <div class="bg-slate-900 border border-slate-700 rounded-lg shadow-xl py-1">
-                   <button (click)="setImageFit(contextMenu().elementId!, 'cover')" class="w-full text-left px-4 py-2 hover:bg-indigo-600 hover:text-white text-xs">Cover (Crop)</button>
-                   <button (click)="setImageFit(contextMenu().elementId!, 'contain')" class="w-full text-left px-4 py-2 hover:bg-indigo-600 hover:text-white text-xs">Contain (Fit)</button>
-                   <button (click)="setImageFit(contextMenu().elementId!, 'fill')" class="w-full text-left px-4 py-2 hover:bg-indigo-600 hover:text-white text-xs">Fill (Stretch)</button>
+               <div class="bg-[#06121e] border border-[#254261] rounded-lg shadow-xl py-1">
+                   <button (click)="setImageFit(contextMenu().elementId!, 'cover')" class="w-full text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] text-xs">Cover (Crop)</button>
+                   <button (click)="setImageFit(contextMenu().elementId!, 'contain')" class="w-full text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] text-xs">Contain (Fit)</button>
+                   <button (click)="setImageFit(contextMenu().elementId!, 'fill')" class="w-full text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] text-xs">Fill (Stretch)</button>
                </div>
            </div>
         </div>
     }
 
-    <button (click)="bringToFront(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-indigo-600 hover:text-white transition-colors"><i class="fa-solid fa-layer-group w-4 text-center"></i> Bring to Front</button>
-    <button (click)="sendToBack(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-indigo-600 hover:text-white transition-colors"><i class="fa-solid fa-layer-group w-4 text-center opacity-50"></i> Send to Back</button>
+    <button (click)="bringToFront(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors"><i class="fa-solid fa-layer-group w-4 text-center"></i> Bring to Front</button>
+    <button (click)="sendToBack(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors"><i class="fa-solid fa-layer-group w-4 text-center opacity-50"></i> Send to Back</button>
     
-    <div class="my-1 border-t border-slate-800"></div>
+    <div class="my-1 border-t border-[#254261]"></div>
     
     <button (click)="deleteElement(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-red-600 hover:text-white text-red-400 transition-colors"><i class="fa-solid fa-trash-can w-4 text-center"></i> Delete</button>
   </div>
 }
 
-<div class="flex h-screen w-screen overflow-hidden text-sm font-sans selection:bg-indigo-500 selection:text-white">
+<div class="flex h-screen w-screen overflow-hidden text-sm font-sans selection:bg-[#01b4e4] selection:text-white">
   
   <!-- LEFT SIDEBAR -->
-  <aside class="w-72 bg-slate-950 border-r border-slate-800 flex flex-col shrink-0 z-20 shadow-xl">
+  <aside class="w-72 bg-[#06121e] border-r border-[#183352] flex flex-col shrink-0 z-20 shadow-xl">
     <!-- App Brand -->
-    <div class="h-14 flex items-center px-4 border-b border-slate-800 bg-slate-950 shrink-0">
-      <div class="flex items-center gap-3 text-indigo-400">
-        <div class="w-8 h-8 rounded bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
-            <i class="fa-solid fa-clapperboard text-lg"></i>
-        </div>
-        <span class="font-bold text-white text-lg tracking-tight">TMDB <span class="text-indigo-500">EDITOR</span></span>
+    <div class="h-16 flex items-center px-4 border-b border-[#183352] bg-[#06121e] shrink-0">
+      <div class="flex items-center gap-3">
+        <img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_1-5bdc75aaebeb75dc7ae79426ddd9be3b2be1e342510f8202baf6bffa71d7f5c4.svg" class="w-10 h-10">
+        <span class="font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#90cea1] to-[#01b4e4] text-xl tracking-tight">TMDB EDITOR</span>
       </div>
     </div>
 
     <!-- Tabs -->
-    <div class="tab-group border-b border-slate-800">
+    <div class="tab-group border-b border-[#183352]">
         <button (click)="activeLeftPanelTab.set('elements')" class="tab" [class.active]="activeLeftPanelTab() === 'elements'">
             <i class="fa-solid fa-shapes"></i> Elements
         </button>
@@ -93,36 +90,72 @@
     <div class="flex-1 overflow-y-auto p-4 custom-scrollbar">
       @if(activeLeftPanelTab() === 'settings') {
         <div class="space-y-6">
-            <div class="p-3 rounded-lg bg-indigo-900/10 border border-indigo-500/20">
-                <h2 class="text-indigo-400 font-semibold mb-2 flex items-center gap-2"><i class="fa-solid fa-key"></i> API Configuration</h2>
-                <p class="text-xs text-slate-400 mb-3 leading-relaxed">Enter your TMDB API Key to access live movie data.</p>
-                <div class="input-group">
-                    <label for="apiKey" class="label">TMDB API Key</label>
-                    <input type="password" id="apiKey" [ngModel]="tmdbApiKey()" (ngModelChange)="tmdbApiKey.set($event)" class="input" placeholder="Enter v3 auth key...">
+            <div class="p-3 rounded-lg bg-[#01b4e4]/5 border border-[#01b4e4]/20">
+                <h2 class="text-[#01b4e4] font-semibold mb-2 flex items-center gap-2"><i class="fa-solid fa-key"></i> API Configuration</h2>
+                
+                <!-- Connection Status -->
+                @if (isAuthValid() && tmdbUser()) {
+                    <div class="flex items-center gap-3 p-2 bg-[#90cea1]/10 border border-[#90cea1]/30 rounded mb-3">
+                        @if(tmdbUser()?.avatar_path) {
+                            <img [src]="tmdbUser()?.avatar_path" class="w-8 h-8 rounded-full border border-[#90cea1]">
+                        } @else {
+                            <div class="w-8 h-8 rounded-full bg-[#90cea1] flex items-center justify-center text-[#0d253f] text-xs font-bold">{{tmdbUser()?.username?.substring(0,1)}}</div>
+                        }
+                        <div class="min-w-0">
+                            <div class="text-[10px] text-[#90cea1] font-bold uppercase tracking-wide">Connected As</div>
+                            <div class="text-xs text-white truncate font-medium">{{ tmdbUser()?.username }}</div>
+                        </div>
+                    </div>
+                }
+                
+                <!-- Auth Toggle -->
+                <div class="flex bg-[#0a1724] rounded p-1 border border-[#254261] mb-3">
+                    <button (click)="authMethod.set('v3')" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-[#01b4e4]]="authMethod() === 'v3'" [class.text-[#0d253f]]="authMethod() === 'v3'" [class.text-[#8eaec4]]="authMethod() !== 'v3'">v3 (Key)</button>
+                    <button (click)="authMethod.set('v4')" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-[#01b4e4]]="authMethod() === 'v4'" [class.text-[#0d253f]]="authMethod() === 'v4'" [class.text-[#8eaec4]]="authMethod() !== 'v4'">v4 (Token)</button>
                 </div>
+                
+                @if (authMethod() === 'v4') {
+                    <div class="input-group mb-0">
+                        <label for="apiToken" class="label">Read Access Token</label>
+                        <input type="password" id="apiToken" [ngModel]="tmdbReadToken()" (ngModelChange)="tmdbReadToken.set($event)" class="input" placeholder="eyJhbGciOiJIUzI1Ni...">
+                        <p class="text-[10px] text-[#64839e] mt-1">Use TMDB API v4 Bearer Token (Recommended)</p>
+                    </div>
+                } @else {
+                    <div class="input-group mb-0">
+                        <label for="apiKey" class="label">API Key (v3)</label>
+                        <input type="password" id="apiKey" [ngModel]="tmdbApiKey()" (ngModelChange)="tmdbApiKey.set($event)" class="input" placeholder="a1b2c3d4...">
+                        <p class="text-[10px] text-[#64839e] mt-1">Use standard TMDB API Key</p>
+                    </div>
+                }
+                
+                <button (click)="openTmdbSettings()" class="btn-tmdb w-full mt-3">
+                    <img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_1-5bdc75aaebeb75dc7ae79426ddd9be3b2be1e342510f8202baf6bffa71d7f5c4.svg" class="w-5 h-5">
+                    <span>Get TMDB Credentials</span>
+                    <i class="fa-solid fa-external-link-alt text-[10px] opacity-50 ml-auto"></i>
+                </button>
             </div>
 
             <div>
               <div class="label">Localization</div>
               <div class="input-group">
-                <label class="text-xs text-slate-500 mb-1 block">Watch Region</label>
+                <label class="text-xs text-[#64839e] mb-1 block">Watch Region</label>
                 <select id="watchRegion" [ngModel]="watchRegion()" (ngModelChange)="watchRegion.set($event)" class="select">
                     @for (country of countries; track country.iso_3166_1) { <option [value]="country.iso_3166_1">{{ country.english_name }}</option> }
                 </select>
               </div>
               <div class="input-group">
-                <label class="text-xs text-slate-500 mb-1 block">Language</label>
+                <label class="text-xs text-[#64839e] mb-1 block">Language</label>
                 <select id="language" [ngModel]="language()" (ngModelChange)="language.set($event)" class="select">
                     @for (lang of languages; track lang.iso_639_1) { <option [value]="lang.iso_639_1">{{ lang.english_name }}</option> }
                 </select>
               </div>
             </div>
 
-            <div class="flex items-center justify-between p-3 rounded bg-slate-900 border border-slate-800">
-                <span class="text-slate-300">Include Adult Content</span>
+            <div class="flex items-center justify-between p-3 rounded bg-[#0a1724] border border-[#254261]">
+                <span class="text-[#dcf5ff]">Include Adult Content</span>
                 <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
-                    <input type="checkbox" [ngModel]="includeAdult()" (ngModelChange)="includeAdult.set($event)" id="toggle-adult" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer transition-transform duration-200 ease-in-out" [class.translate-x-5]="includeAdult()" [class.border-indigo-500]="includeAdult()" [class.border-slate-400]="!includeAdult()"/>
-                    <label for="toggle-adult" class="toggle-label block overflow-hidden h-5 rounded-full cursor-pointer" [class.bg-indigo-500]="includeAdult()" [class.bg-slate-700]="!includeAdult()"></label>
+                    <input type="checkbox" [ngModel]="includeAdult()" (ngModelChange)="includeAdult.set($event)" id="toggle-adult" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer transition-transform duration-200 ease-in-out" [class.translate-x-5]="includeAdult()" [class.border-[#01b4e4]]="includeAdult()" [class.border-slate-400]="!includeAdult()"/>
+                    <label for="toggle-adult" class="toggle-label block overflow-hidden h-5 rounded-full cursor-pointer" [class.bg-[#01b4e4]]="includeAdult()" [class.bg-[#1b3a57]]="!includeAdult()"></label>
                 </div>
             </div>
         </div>
@@ -132,100 +165,105 @@
         <div class="space-y-6">
             <!-- Static Elements -->
             <div>
-              <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 px-1">Static Basics</div>
+              <div class="text-xs font-bold text-[#8eaec4] uppercase tracking-wider mb-3 px-1">Static Basics</div>
               <div class="card-grid">
                 <button (click)="addElement('text')" class="card-btn">
-                    <i class="fa-solid fa-font text-pink-400"></i> <span>Text</span>
+                    <i class="fa-solid fa-font text-[#01b4e4]"></i> <span>Text</span>
                 </button>
                 <button (click)="addElement('image')" class="card-btn">
-                    <i class="fa-regular fa-image text-emerald-400"></i> <span>Image</span>
+                    <i class="fa-regular fa-image text-[#90cea1]"></i> <span>Image</span>
                 </button>
                 <button (click)="addElement('shape')" class="card-btn">
-                    <i class="fa-solid fa-square text-amber-400"></i> <span>Shape</span>
+                    <i class="fa-solid fa-square text-white"></i> <span>Shape</span>
                 </button>
               </div>
             </div>
 
             <!-- Dynamic Content -->
             <div>
-                <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 px-1">Dynamic Content</div>
+                <div class="text-xs font-bold text-[#8eaec4] uppercase tracking-wider mb-3 px-1">Dynamic Content</div>
                 <div class="grid grid-cols-2 gap-2 mb-2">
                     <button (click)="addElement('tmdb-poster')" class="card-btn flex-row justify-start px-3">
-                        <i class="fa-solid fa-ticket text-blue-400 w-5"></i> <span>Poster</span>
+                        <i class="fa-solid fa-ticket text-[#01b4e4] w-5"></i> <span>Poster</span>
                     </button>
                     <button (click)="addElement('tmdb-backdrop')" class="card-btn flex-row justify-start px-3">
-                        <i class="fa-solid fa-image text-blue-400 w-5"></i> <span>Backdrop</span>
+                        <i class="fa-solid fa-image text-[#01b4e4] w-5"></i> <span>Backdrop</span>
                     </button>
                 </div>
                 <div class="grid grid-cols-3 gap-2">
-                    <button (click)="addElement('tmdb-title')" class="card-btn"><i class="fa-solid fa-heading text-slate-400"></i><span>Title</span></button>
-                    <button (click)="addElement('tmdb-overview')" class="card-btn"><i class="fa-solid fa-align-left text-slate-400"></i><span>Plot</span></button>
-                    <button (click)="addElement('tmdb-rating')" class="card-btn"><i class="fa-solid fa-star text-yellow-400"></i><span>Rating</span></button>
-                    <button (click)="addElement('tmdb-genres')" class="card-btn"><i class="fa-solid fa-tags text-slate-400"></i><span>Tags</span></button>
-                    <button (click)="addElement('tmdb-logo')" class="card-btn"><i class="fa-brands fa-imdb text-slate-400"></i><span>Logo</span></button>
-                    <button (click)="addElement('tmdb-cast')" class="card-btn"><i class="fa-solid fa-user-group text-slate-400"></i><span>Cast</span></button>
+                    <button (click)="addElement('tmdb-title')" class="card-btn"><i class="fa-solid fa-heading text-[#8eaec4]"></i><span>Title</span></button>
+                    <button (click)="addElement('tmdb-overview')" class="card-btn"><i class="fa-solid fa-align-left text-[#8eaec4]"></i><span>Plot</span></button>
+                    <button (click)="addElement('tmdb-rating')" class="card-btn"><i class="fa-solid fa-star text-[#90cea1]"></i><span>Rating</span></button>
+                    <button (click)="addElement('tmdb-genres')" class="card-btn"><i class="fa-solid fa-tags text-[#8eaec4]"></i><span>Tags</span></button>
+                    <button (click)="addElement('tmdb-logo')" class="card-btn"><i class="fa-brands fa-imdb text-[#8eaec4]"></i><span>Logo</span></button>
+                    <button (click)="addElement('tmdb-cast')" class="card-btn"><i class="fa-solid fa-user-group text-[#8eaec4]"></i><span>Cast</span></button>
                 </div>
+                
+                 <button (click)="addElement('tmdb-dynamic-field')" class="btn btn-secondary w-full justify-start mt-2 border-[#01b4e4]/30 bg-[#01b4e4]/5 text-[#01b4e4]">
+                    <i class="fa-solid fa-database"></i> Custom Dynamic Field
+                </button>
             </div>
             
             <!-- Metadata -->
             <div>
-                 <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 px-1">Metadata</div>
+                 <div class="text-xs font-bold text-[#8eaec4] uppercase tracking-wider mb-3 px-1">Metadata</div>
                  <div class="grid grid-cols-3 gap-2">
-                    <button (click)="addElement('tmdb-release-date')" class="card-btn"><i class="fa-regular fa-calendar text-slate-500"></i><span>Date</span></button>
-                    <button (click)="addElement('tmdb-runtime')" class="card-btn"><i class="fa-regular fa-clock text-slate-500"></i><span>Time</span></button>
-                    <button (click)="addElement('tmdb-tagline')" class="card-btn"><i class="fa-solid fa-quote-left text-slate-500"></i><span>Quote</span></button>
-                    <button (click)="addElement('tmdb-network-logo', 'tv')" class="card-btn"><i class="fa-solid fa-tv text-slate-500"></i><span>Net.</span></button>
-                    <button (click)="addElement('tmdb-season-episode-count', 'tv')" class="card-btn"><i class="fa-solid fa-list-ol text-slate-500"></i><span>S/E</span></button>
+                    <button (click)="addElement('tmdb-release-date')" class="card-btn"><i class="fa-regular fa-calendar text-[#64839e]"></i><span>Date</span></button>
+                    <button (click)="addElement('tmdb-runtime')" class="card-btn"><i class="fa-regular fa-clock text-[#64839e]"></i><span>Time</span></button>
+                    <button (click)="addElement('tmdb-tagline')" class="card-btn"><i class="fa-solid fa-quote-left text-[#64839e]"></i><span>Quote</span></button>
+                    <button (click)="addElement('tmdb-network-logo', 'tv')" class="card-btn"><i class="fa-solid fa-tv text-[#64839e]"></i><span>Net.</span></button>
+                    <button (click)="addElement('tmdb-season-episode-count', 'tv')" class="card-btn"><i class="fa-solid fa-list-ol text-[#64839e]"></i><span>S/E</span></button>
                  </div>
             </div>
 
             <!-- Collections -->
             <div>
-              <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 px-1">Collections</div>
+              <div class="text-xs font-bold text-[#8eaec4] uppercase tracking-wider mb-3 px-1">Collections</div>
               <div class="space-y-2">
-                <button (click)="addElement('tmdb-poster-scroll', undefined, 'movie')" class="btn btn-secondary w-full justify-start"><i class="fa-solid fa-film text-indigo-400"></i> Movie Poster Scroll</button>
-                <button (click)="addElement('tmdb-poster-scroll', undefined, 'tv')" class="btn btn-secondary w-full justify-start"><i class="fa-solid fa-tv text-indigo-400"></i> TV Poster Scroll</button>
-                <button (click)="addElement('tmdb-backdrop-slideshow', undefined, 'movie')" class="btn btn-secondary w-full justify-start"><i class="fa-solid fa-images text-purple-400"></i> Movie Slideshow</button>
-                <button (click)="addElement('tmdb-backdrop-slideshow', undefined, 'tv')" class="btn btn-secondary w-full justify-start"><i class="fa-solid fa-compact-disc text-purple-400"></i> TV Slideshow</button>
+                <button (click)="addElement('tmdb-poster-scroll', undefined, 'movie')" class="btn btn-secondary w-full justify-start"><i class="fa-solid fa-film text-[#01b4e4]"></i> Movie Poster Scroll</button>
+                <button (click)="addElement('tmdb-poster-scroll', undefined, 'tv')" class="btn btn-secondary w-full justify-start"><i class="fa-solid fa-tv text-[#01b4e4]"></i> TV Poster Scroll</button>
+                <button (click)="addElement('tmdb-backdrop-slideshow', undefined, 'movie')" class="btn btn-secondary w-full justify-start"><i class="fa-solid fa-images text-[#90cea1]"></i> Movie Slideshow</button>
+                <button (click)="addElement('tmdb-backdrop-slideshow', undefined, 'tv')" class="btn btn-secondary w-full justify-start"><i class="fa-solid fa-compact-disc text-[#90cea1]"></i> TV Slideshow</button>
               </div>
             </div>
         </div>
       }
     </div>
     
-    <div class="p-3 border-t border-slate-800 text-center text-xs text-slate-600">
-        TMDB Editor &copy; 2025
+    <div class="p-3 border-t border-[#183352] text-center text-xs text-[#64839e]">
+        TMDB Editor V4 &copy; 2025
     </div>
   </aside>
 
   <!-- CENTER: CANVAS AREA -->
-  <div class="flex-1 flex flex-col bg-slate-900 relative z-10">
+  <div class="flex-1 flex flex-col bg-[#0d253f] relative z-10 min-w-0">
     
     <!-- Canvas Toolbar -->
-    <div class="h-14 flex items-center justify-between px-6 border-b border-slate-800 bg-slate-950 shrink-0 shadow-sm">
+    <div class="h-16 flex items-center justify-between px-6 border-b border-[#183352] bg-[#06121e] shrink-0 shadow-sm gap-4">
       <div class="flex items-center gap-4">
-        <div class="flex items-center gap-2 bg-slate-900 p-1 rounded-lg border border-slate-800">
-            <button (click)="selectedPreset.set('mobile')" class="p-2 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors" [class.bg-slate-800]="selectedPreset() === 'mobile'" [class.text-white]="selectedPreset() === 'mobile'" title="Mobile"><i class="fa-solid fa-mobile-screen"></i></button>
-            <button (click)="selectedPreset.set('tablet')" class="p-2 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors" [class.bg-slate-800]="selectedPreset() === 'tablet'" [class.text-white]="selectedPreset() === 'tablet'" title="Tablet"><i class="fa-solid fa-tablet-screen-button"></i></button>
-            <button (click)="selectedPreset.set('tv')" class="p-2 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors" [class.bg-slate-800]="selectedPreset() === 'tv'" [class.text-white]="selectedPreset() === 'tv'" title="TV"><i class="fa-solid fa-tv"></i></button>
+        <div class="flex items-center gap-2 bg-[#0d253f] p-1 rounded-lg border border-[#183352]">
+            <button (click)="changeCanvasMode('mobile', undefined)" class="p-2 rounded hover:bg-[#1b3a57] text-[#8eaec4] hover:text-white transition-colors" [class.bg-[#1b3a57]]="selectedPreset() === 'mobile'" [class.text-white]="selectedPreset() === 'mobile'" title="Mobile"><i class="fa-solid fa-mobile-screen"></i></button>
+            <button (click)="changeCanvasMode('tablet', undefined)" class="p-2 rounded hover:bg-[#1b3a57] text-[#8eaec4] hover:text-white transition-colors" [class.bg-[#1b3a57]]="selectedPreset() === 'tablet'" [class.text-white]="selectedPreset() === 'tablet'" title="Tablet"><i class="fa-solid fa-tablet-screen-button"></i></button>
+            <button (click)="changeCanvasMode('tv', undefined)" class="p-2 rounded hover:bg-[#1b3a57] text-[#8eaec4] hover:text-white transition-colors" [class.bg-[#1b3a57]]="selectedPreset() === 'tv'" [class.text-white]="selectedPreset() === 'tv'" title="TV"><i class="fa-solid fa-tv"></i></button>
         </div>
         
-        <div class="h-6 w-px bg-slate-800"></div>
+        <div class="h-6 w-px bg-[#183352]"></div>
 
-        <div class="flex items-center gap-2 bg-slate-900 p-1 rounded-lg border border-slate-800">
-            <button (click)="orientation.set('portrait')" class="p-2 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors" [class.bg-slate-800]="orientation() === 'portrait'" [class.text-white]="orientation() === 'portrait'" title="Portrait"><i class="fa-solid fa-file-image"></i></button>
-            <button (click)="orientation.set('landscape')" class="p-2 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors" [class.bg-slate-800]="orientation() === 'landscape'" [class.text-white]="orientation() === 'landscape'" title="Landscape"><i class="fa-solid fa-image"></i></button>
+        <div class="flex items-center gap-2 bg-[#0d253f] p-1 rounded-lg border border-[#183352]">
+            <button (click)="changeCanvasMode(undefined, 'portrait')" class="p-2 rounded hover:bg-[#1b3a57] text-[#8eaec4] hover:text-white transition-colors" [class.bg-[#1b3a57]]="orientation() === 'portrait'" [class.text-white]="orientation() === 'portrait'" title="Portrait"><i class="fa-solid fa-file-image"></i></button>
+            <button (click)="changeCanvasMode(undefined, 'landscape')" class="p-2 rounded hover:bg-[#1b3a57] text-[#8eaec4] hover:text-white transition-colors" [class.bg-[#1b3a57]]="orientation() === 'landscape'" [class.text-white]="orientation() === 'landscape'" title="Landscape"><i class="fa-solid fa-image"></i></button>
         </div>
 
-        <div class="h-6 w-px bg-slate-800"></div>
+        <div class="h-6 w-px bg-[#183352]"></div>
         
         <div class="flex items-center gap-2">
-            <i class="fa-solid fa-magnifying-glass text-xs text-slate-500"></i>
-            <input type="range" min="0.1" max="2" step="0.05" [ngModel]="zoomLevel()" (ngModelChange)="zoomLevel.set(+$event)" class="w-24 accent-indigo-500 h-1 bg-slate-700 rounded appearance-none">
-            <span class="text-[10px] w-8 text-slate-400 font-mono">{{Math.round(zoomLevel() * 100)}}%</span>
+            <i class="fa-solid fa-magnifying-glass text-xs text-[#64839e]"></i>
+            <input type="range" min="0.1" max="2" step="0.05" [ngModel]="zoomLevel()" (ngModelChange)="zoomLevel.set(+$event)" class="w-24 h-1 bg-[#183352] rounded appearance-none" title="Zoom">
+            <span class="text-[10px] w-8 text-[#8eaec4] font-mono">{{Math.round(zoomLevel() * 100)}}%</span>
+            <button (click)="fitCanvasToScreen()" class="text-xs text-[#01b4e4] hover:text-white px-2 py-1 rounded border border-[#01b4e4]/30 bg-[#01b4e4]/10">Fit</button>
         </div>
 
-        <div class="text-xs text-slate-500 font-mono ml-2">
+        <div class="text-xs text-[#64839e] font-mono ml-2 whitespace-nowrap">
             {{canvasConfig().width}} &times; {{canvasConfig().height}}
         </div>
       </div>
@@ -234,7 +272,7 @@
         <button (click)="undo()" [disabled]="historyIndex() <= 0" class="btn btn-ghost btn-icon rounded-full" title="Undo"><i class="fa-solid fa-rotate-left"></i></button>
         <button (click)="redo()" [disabled]="historyIndex() >= history().length - 1" class="btn btn-ghost btn-icon rounded-full" title="Redo"><i class="fa-solid fa-rotate-right"></i></button>
         
-        <div class="h-6 w-px bg-slate-800 mx-2"></div>
+        <div class="h-6 w-px bg-[#183352] mx-2"></div>
 
         <button (click)="previewMode.set(!previewMode())" class="btn" [class.btn-secondary]="!previewMode()" [class.btn-primary]="previewMode()">
             <i class="fa-solid" [class.fa-eye-slash]="previewMode()" [class.fa-eye]="!previewMode()"></i> {{ previewMode() ? 'Exit Preview' : 'Preview' }}
@@ -243,17 +281,17 @@
     </div>
     
     <!-- Canvas Viewport -->
-    <div id="canvas-bg" class="flex-1 overflow-auto flex items-center justify-center p-8 canvas-pattern relative" (click)="deselectCanvas($event)">
+    <div id="canvas-bg" class="flex-1 overflow-auto flex flex-col items-center justify-center p-8 canvas-pattern relative bg-[#0d253f]" (click)="deselectCanvas($event)">
       
       <div 
         id="canvas" 
-        class="bg-black shadow-2xl relative overflow-hidden ring-1 ring-slate-900 transition-all duration-300 ease-out" 
+        class="bg-black shadow-2xl relative overflow-hidden ring-1 ring-[#06121e] transition-all duration-300 ease-out shrink-0" 
         [style.width.px]="canvasConfig().width" [style.height.px]="canvasConfig().height"
         [style.transform]="'scale(' + canvasConfig().scale + ')'"
         style="transform-origin: center center;">
         
         @if(!previewMode() && elements().length === 0) {
-            <div class="absolute inset-0 flex flex-col items-center justify-center text-slate-700 pointer-events-none">
+            <div class="absolute inset-0 flex flex-col items-center justify-center text-[#254261] pointer-events-none">
                 <i class="fa-regular fa-square-plus text-6xl mb-4 opacity-20"></i>
                 <p class="text-lg font-medium opacity-40">Add an element to start designing</p>
             </div>
@@ -265,7 +303,7 @@
               [id]="element.id"
               class="draggable-element group"
               [class.ring-2]="selectedElementId() === element.id && !previewMode()"
-              [class.ring-indigo-500]="selectedElementId() === element.id && !previewMode()"
+              [class.ring-[#01b4e4]]="selectedElementId() === element.id && !previewMode()"
               [class.ring-offset-2]="selectedElementId() === element.id && !previewMode()"
               [class.ring-offset-black]="selectedElementId() === element.id && !previewMode()"
               [style.position]="'absolute'" [style.top.px]="element.y" [style.left.px]="element.x"
@@ -287,7 +325,6 @@
               (mousedown)="selectElement(element.id)"
               (contextmenu)="openContextMenu($event, element.id)">
               
-                <!-- Resize handles visible only when selected and not in preview -->
                 @if (selectedElementId() === element.id && !previewMode()) {
                     <div class="absolute -right-1 -bottom-1 w-3 h-3 bg-white rounded-full z-50 cursor-se-resize shadow-sm"></div>
                 }
@@ -295,9 +332,20 @@
                 @switch (element.type) {
                   @case ('text') { <div class="p-2 w-full h-full pointer-events-none whitespace-pre-wrap leading-normal">{{ element.content }}</div> }
                   @case ('image') { <img [src]="element.content" class="w-full h-full pointer-events-none" [style.object-fit]="element.imageFit" [style.borderRadius.px]="element.styles.borderRadius"> }
-                  @case ('tmdb-poster') { @if (element.tmdbData?.poster_path) { <img [src]="'https://image.tmdb.org/t/p/w500' + element.tmdbData.poster_path" class="w-full h-full pointer-events-none" [style.object-fit]="element.imageFit"> } @else { <div class="w-full h-full flex items-center justify-center bg-slate-800 text-slate-600"><i class="fa-solid fa-ticket text-4xl"></i></div> } }
-                  @case ('tmdb-backdrop') { @if (element.tmdbData?.backdrop_path) { <img [src]="'https://image.tmdb.org/t/p/w1280' + element.tmdbData.backdrop_path" class="w-full h-full pointer-events-none" [style.object-fit]="element.imageFit"> } @else { <div class="w-full h-full flex items-center justify-center bg-slate-800 text-slate-600"><i class="fa-solid fa-image text-4xl"></i></div> } }
-                  @case ('tmdb-logo') { @if (getBestLogo(element)) { <img [src]="getBestLogo(element)" class="w-full h-full p-2 pointer-events-none" [style.object-fit]="element.imageFit"> } @else { <div class="w-full h-full flex items-center justify-center border-2 border-dashed border-slate-700 text-slate-600"><span class="font-bold text-xl">LOGO</span></div> } }
+                  
+                  @case ('tmdb-dynamic-field') {
+                      <div class="p-2 w-full h-full pointer-events-none whitespace-pre-wrap leading-normal flex flex-col justify-center">
+                          @if (element.tmdbData) {
+                              {{ element.dataPrefix }}{{ resolveDataPath(element.tmdbData, element.dataPath || '') }}{{ element.dataSuffix }}
+                          } @else {
+                              <span class="opacity-50 text-xs italic">{{ element.dataPath || 'Select Data Path' }}</span>
+                          }
+                      </div>
+                  }
+
+                  @case ('tmdb-poster') { @if (element.tmdbData?.poster_path) { <img [src]="'https://image.tmdb.org/t/p/w500' + element.tmdbData.poster_path" class="w-full h-full pointer-events-none" [style.object-fit]="element.imageFit"> } @else { <div class="w-full h-full flex items-center justify-center bg-[#183352] text-[#64839e]"><i class="fa-solid fa-ticket text-4xl"></i></div> } }
+                  @case ('tmdb-backdrop') { @if (element.tmdbData?.backdrop_path) { <img [src]="'https://image.tmdb.org/t/p/w1280' + element.tmdbData.backdrop_path" class="w-full h-full pointer-events-none" [style.object-fit]="element.imageFit"> } @else { <div class="w-full h-full flex items-center justify-center bg-[#183352] text-[#64839e]"><i class="fa-solid fa-image text-4xl"></i></div> } }
+                  @case ('tmdb-logo') { @if (getBestLogo(element)) { <img [src]="getBestLogo(element)" class="w-full h-full p-2 pointer-events-none" [style.object-fit]="element.imageFit"> } @else { <div class="w-full h-full flex items-center justify-center border-2 border-dashed border-[#254261] text-[#64839e]"><span class="font-bold text-xl">LOGO</span></div> } }
                   @case ('tmdb-title') { <div class="p-2 w-full h-full pointer-events-none leading-tight">{{ element.tmdbData?.title || element.tmdbData?.name || 'Movie Title' }}</div> }
                   @case ('tmdb-overview') { <div class="p-2 text-xs overflow-hidden h-full w-full pointer-events-none">{{ element.tmdbData?.overview || 'Overview text placeholder...' }}</div> }
                   @case ('tmdb-tagline') { <div class="p-2 text-sm italic opacity-80 w-full h-full pointer-events-none">{{ element.tmdbData?.tagline || 'Tagline goes here...' }}</div> }
@@ -307,19 +355,32 @@
                   @case ('tmdb-network-logo') { @if (getBestNetworkLogo(element)) { <img [src]="getBestNetworkLogo(element)" class="w-full h-full p-2 pointer-events-none" [style.object-fit]="element.imageFit"> } @else { <div class="w-full h-full flex items-center justify-center bg-white/10"><i class="fa-solid fa-tv text-2xl"></i></div> } }
                   @case ('tmdb-rating') { <div class="p-2 text-lg text-yellow-400 pointer-events-none"> @if(element.tmdbData?.vote_average){ @for(i of [].constructor(Math.round(element.tmdbData.vote_average/2)); track i){<span>★</span>} @for(i of [].constructor(5 - Math.round(element.tmdbData.vote_average/2)); track i){<span class="opacity-30">★</span>} } @else { <span>★★★★☆</span> } </div> }
                   @case ('tmdb-genres') { <div class="p-2 flex flex-wrap gap-2 items-center justify-center pointer-events-none"> @if(element.tmdbData?.genres) { @for(genre of element.tmdbData.genres; track genre.id) { <span class="genre-pill">{{genre.name}}</span> } } @else { <span class="genre-pill">Action</span><span class="genre-pill">Drama</span> } </div> }
-                  @case ('tmdb-poster-scroll') { <div class="w-full h-full flex items-center overflow-x-hidden p-2 gap-3 pointer-events-none"> @if (element.tmdbData?.results) { @for(item of element.tmdbData.results.slice(0,4); track item.id) { @if(item.poster_path) { <img [src]="'https://image.tmdb.org/t/p/w500' + item.poster_path" class="h-full w-auto inline-block rounded shadow-lg"> } } } @else { <div class="flex gap-2 opacity-50"><div class="h-32 w-20 bg-slate-700 rounded"></div><div class="h-32 w-20 bg-slate-700 rounded"></div><div class="h-32 w-20 bg-slate-700 rounded"></div></div> } </div> }
-                  @case ('tmdb-cast') { <div class="w-full h-full flex items-start overflow-hidden p-2 gap-4 text-center text-xs pointer-events-none"> @if (element.tmdbData?.credits?.cast) { @for(actor of element.tmdbData.credits.cast.slice(0, 5); track actor.id) { @if(actor.profile_path) { <div class="flex flex-col items-center w-16 shrink-0"> <img [src]="'https://image.tmdb.org/t/p/w500' + actor.profile_path" class="w-12 h-12 object-cover rounded-full mb-1 shadow-md border border-white/10"> <span class="truncate w-full opacity-80">{{actor.name}}</span> </div> } } } @else { <div class="flex gap-4 opacity-50"><div class="w-12 h-12 rounded-full bg-slate-700"></div><div class="w-12 h-12 rounded-full bg-slate-700"></div></div> } </div> }
+                  @case ('tmdb-poster-scroll') { 
+                    <div class="w-full h-full flex items-center overflow-x-hidden p-2 gap-3 pointer-events-none">
+                      <div class="poster-scroll-container flex gap-3 h-full">
+                        @if (element.tmdbData?.results) { 
+                            @for(item of element.tmdbData.results.slice(0,10); track item.id) { 
+                                @if(item.poster_path) { 
+                                    <img [src]="'https://image.tmdb.org/t/p/w500' + item.poster_path" class="h-full w-auto inline-block rounded shadow-lg"> 
+                                } 
+                            } 
+                        } @else { 
+                            <div class="flex gap-2 opacity-50"><div class="h-32 w-20 bg-[#183352] rounded"></div><div class="h-32 w-20 bg-[#183352] rounded"></div><div class="h-32 w-20 bg-[#183352] rounded"></div></div> 
+                        }
+                      </div>
+                    </div> 
+                  }
+                  @case ('tmdb-cast') { <div class="w-full h-full flex items-start overflow-hidden p-2 gap-4 text-center text-xs pointer-events-none"> @if (element.tmdbData?.credits?.cast) { @for(actor of element.tmdbData.credits.cast.slice(0, 5); track actor.id) { @if(actor.profile_path) { <div class="flex flex-col items-center w-16 shrink-0"> <img [src]="'https://image.tmdb.org/t/p/w500' + actor.profile_path" class="w-12 h-12 object-cover rounded-full mb-1 shadow-md border border-white/10"> <span class="truncate w-full opacity-80">{{actor.name}}</span> </div> } } } @else { <div class="flex gap-4 opacity-50"><div class="w-12 h-12 rounded-full bg-[#183352]"></div><div class="w-12 h-12 rounded-full bg-[#183352]"></div></div> } </div> }
                   @case ('tmdb-backdrop-slideshow') {
                       @if (slideshowState()[element.id]?.backdrops.length) {
                           @let state = slideshowState()[element.id];
                           <div class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 pointer-events-none" [style.backgroundImage]="'url(' + state.backdrops[state.idx1] + ')'" [class.opacity-100]="!state.fade" [class.opacity-0]="state.fade"></div>
                           <div class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 pointer-events-none" [style.backgroundImage]="'url(' + state.backdrops[state.idx2] + ')'" [class.opacity-0]="!state.fade" [class.opacity-100]="state.fade"></div>
                       } @else {
-                          <div class="w-full h-full flex items-center justify-center bg-slate-800 text-slate-600"><i class="fa-solid fa-play-circle text-4xl"></i></div>
+                          <div class="w-full h-full flex items-center justify-center bg-[#183352] text-[#64839e]"><i class="fa-solid fa-play-circle text-4xl"></i></div>
                       }
                   }
                 }
-
             </div>
           }
         }
@@ -328,8 +389,8 @@
   </div>
 
   <!-- RIGHT SIDEBAR -->
-  <aside class="w-80 bg-slate-950 border-l border-slate-800 flex flex-col shrink-0 z-20 shadow-xl">
-    <div class="tab-group pt-2 border-b border-slate-800">
+  <aside class="w-80 bg-[#06121e] border-l border-[#183352] flex flex-col shrink-0 z-20 shadow-xl">
+    <div class="tab-group pt-2 border-b border-[#183352]">
       <button (click)="activeRightPanelTab.set('properties')" [disabled]="!selectedElement()" class="tab" [class.active]="activeRightPanelTab() === 'properties'">
         <i class="fa-solid fa-sliders"></i> Properties
       </button>
@@ -341,14 +402,14 @@
       </button>
     </div>
 
-    <div class="flex-1 overflow-y-auto custom-scrollbar bg-slate-950">
+    <div class="flex-1 overflow-y-auto custom-scrollbar bg-[#06121e]">
         @if (activeRightPanelTab() === 'layers') {
             <div class="p-3">
                 @if(elements().length === 0) {
-                    <div class="text-center text-slate-500 py-8 text-xs">No layers yet.</div>
+                    <div class="text-center text-[#64839e] py-8 text-xs">No layers yet.</div>
                 }
                 
-                <div class="text-[10px] text-slate-500 mb-2 px-2"><i class="fa-solid fa-info-circle mr-1"></i> Drag a layer onto another to group/link them.</div>
+                <div class="text-[10px] text-[#64839e] mb-2 px-2"><i class="fa-solid fa-info-circle mr-1"></i> Drag a layer onto another to group/link them.</div>
                 
                 @for (element of elements().slice().reverse(); track element.id) {
                     <div 
@@ -363,28 +424,29 @@
                         [class.drag-over]="dragOverLayerId() === element.id">
                         
                         <div class="flex items-center gap-2 overflow-hidden flex-1">
-                            <i class="fa-solid text-xs w-4 text-center text-slate-500" 
+                            <i class="fa-solid text-xs w-4 text-center text-[#8eaec4]" 
                                [class.fa-font]="element.type === 'text'" 
                                [class.fa-image]="element.type.includes('image') || element.type.includes('poster') || element.type.includes('backdrop')"
-                               [class.fa-square]="element.type === 'shape'"></i>
+                               [class.fa-square]="element.type === 'shape'"
+                               [class.fa-database]="element.type === 'tmdb-dynamic-field'"></i>
                             
                             <div class="flex flex-col min-w-0">
                                 <span class="truncate font-medium leading-tight">{{ formatTypeName(element.type) }}</span>
                                 @if (element.linkGroup) {
                                     <div class="flex items-center gap-1 mt-0.5">
-                                        <span class="text-[9px] bg-indigo-900/50 text-indigo-300 px-1 py-0.5 rounded border border-indigo-500/30 flex items-center gap-1">
+                                        <span class="text-[9px] bg-[#01b4e4]/20 text-[#01b4e4] px-1 py-0.5 rounded border border-[#01b4e4]/30 flex items-center gap-1">
                                             <i class="fa-solid fa-link text-[8px]"></i>
                                             {{element.linkGroup.replace('group_', 'Group ')}}
                                         </span>
-                                        <button (click)="unlinkElement(element.id, $event)" class="text-slate-500 hover:text-red-400 px-1" title="Unlink"><i class="fa-solid fa-unlink text-[9px]"></i></button>
+                                        <button (click)="unlinkElement(element.id, $event)" class="text-[#64839e] hover:text-red-400 px-1" title="Unlink"><i class="fa-solid fa-unlink text-[9px]"></i></button>
                                     </div>
                                 }
                             </div>
                         </div>
                         
                         <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                             <button (click)="deleteElement(element.id); $event.stopPropagation()" class="p-1 text-slate-500 hover:text-red-400"><i class="fa-solid fa-trash text-xs"></i></button>
-                            <button (click)="toggleVisibility(element.id); $event.stopPropagation()" class="p-1 text-slate-500 hover:text-white">
+                             <button (click)="deleteElement(element.id); $event.stopPropagation()" class="p-1 text-[#64839e] hover:text-red-400"><i class="fa-solid fa-trash text-xs"></i></button>
+                            <button (click)="toggleVisibility(element.id); $event.stopPropagation()" class="p-1 text-[#64839e] hover:text-white">
                                 <i class="fa-solid fa-fw text-xs" [class.fa-eye]="element.visible" [class.fa-eye-slash]="!element.visible"></i>
                             </button>
                         </div>
@@ -395,14 +457,14 @@
 
         @if (activeRightPanelTab() === 'export') {
           <div class="p-5 h-full flex flex-col gap-4">
-            <div class="bg-indigo-900/10 border border-indigo-500/20 rounded-lg p-4">
-                <h3 class="text-indigo-400 font-semibold mb-1">Ready to Publish?</h3>
-                <p class="text-xs text-slate-400">Download a standalone PHP file containing your layout and logic. Upload to any server to view.</p>
+            <div class="bg-[#01b4e4]/10 border border-[#01b4e4]/20 rounded-lg p-4">
+                <h3 class="text-[#01b4e4] font-semibold mb-1">Ready to Publish?</h3>
+                <p class="text-xs text-[#8eaec4]">Download a standalone PHP file containing your layout and logic. Upload to any server to view.</p>
             </div>
             
-            <div class="flex-1 relative bg-slate-900 rounded-lg border border-slate-800 overflow-hidden group">
+            <div class="flex-1 relative bg-[#0a1724] rounded-lg border border-[#183352] overflow-hidden group">
                 <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button class="text-xs bg-slate-800 text-white px-2 py-1 rounded border border-slate-700">Copy</button>
+                    <button class="text-xs bg-[#183352] text-white px-2 py-1 rounded border border-[#254261]">Copy</button>
                 </div>
                 <pre class="p-4 text-[10px] text-slate-300 font-mono overflow-auto h-full custom-scrollbar">{{ generatedPhpCode() }}</pre>
             </div>
@@ -414,10 +476,10 @@
         }
 
         @if (activeRightPanelTab() === 'properties' && selectedElement(); as el) {
-            <div class="bg-slate-950">
+            <div class="bg-[#06121e]">
               <div class="panel-header">
                 <span class="panel-title">{{ formatTypeName(el.type) }} Settings</span>
-                <button (click)="deleteElement(el.id)" class="text-slate-500 hover:text-red-500 transition-colors"><i class="fa-solid fa-trash-can"></i></button>
+                <button (click)="deleteElement(el.id)" class="text-[#64839e] hover:text-red-500 transition-colors"><i class="fa-solid fa-trash-can"></i></button>
               </div>
               
               <!-- TMDB CONFIGURATION -->
@@ -428,9 +490,9 @@
                     @if(el.type.includes('scroll') || el.type.includes('slideshow')) {
                       <div class="input-group">
                         <label class="label">Collection Type</label>
-                        <div class="flex bg-slate-900 rounded p-1 border border-slate-700">
-                             <button (click)="updateElementProperty('tmdbCollectionType', 'movie'); fetchTmdbDataForElement(el.id)" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-indigo-600]="el.tmdbCollectionType === 'movie'" [class.text-white]="el.tmdbCollectionType === 'movie'" [class.text-slate-400]="el.tmdbCollectionType !== 'movie'">Movies</button>
-                             <button (click)="updateElementProperty('tmdbCollectionType', 'tv'); fetchTmdbDataForElement(el.id)" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-indigo-600]="el.tmdbCollectionType === 'tv'" [class.text-white]="el.tmdbCollectionType === 'tv'" [class.text-slate-400]="el.tmdbCollectionType !== 'tv'">TV</button>
+                        <div class="flex bg-[#0a1724] rounded p-1 border border-[#254261]">
+                             <button (click)="updateElementProperty('tmdbCollectionType', 'movie'); fetchTmdbDataForElement(el.id)" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-[#01b4e4]]="el.tmdbCollectionType === 'movie'" [class.text-[#0d253f]]="el.tmdbCollectionType === 'movie'" [class.text-[#8eaec4]]="el.tmdbCollectionType !== 'movie'">Movies</button>
+                             <button (click)="updateElementProperty('tmdbCollectionType', 'tv'); fetchTmdbDataForElement(el.id)" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-[#01b4e4]]="el.tmdbCollectionType === 'tv'" [class.text-[#0d253f]]="el.tmdbCollectionType === 'tv'" [class.text-[#8eaec4]]="el.tmdbCollectionType !== 'tv'">TV</button>
                         </div>
                       </div>
                       <div class="input-group">
@@ -441,8 +503,8 @@
                       </div>
                       
                       @if(el.tmdbEndpoint?.startsWith('discover')) {
-                        <div class="p-3 bg-slate-900 rounded border border-slate-700/50 mt-2">
-                           <div class="label mb-2 text-indigo-400">Discover Filters</div>
+                        <div class="p-3 bg-[#0a1724] rounded border border-[#254261] mt-2">
+                           <div class="label mb-2 text-[#01b4e4]">Discover Filters</div>
                            <div class="input-group">
                                <label class="label">Sort By</label>
                                <select [ngModel]="el.discoverFilters.sortBy" (ngModelChange)="updateDiscoverFilter('sortBy', $event); fetchTmdbDataForElement(el.id)" class="select text-xs"> 
@@ -455,10 +517,10 @@
                            </div>
                            <div class="input-group mb-0">
                                <label class="label">Genres</label>
-                              <div class="h-24 overflow-y-auto bg-slate-950 rounded border border-slate-800 p-2 space-y-1 custom-scrollbar">
+                              <div class="h-24 overflow-y-auto bg-[#06121e] rounded border border-[#183352] p-2 space-y-1 custom-scrollbar">
                                 @for(genre of availableGenres(); track genre.id) {
-                                  <label class="flex items-center space-x-2 text-xs cursor-pointer hover:text-white text-slate-400 transition-colors">
-                                      <input type="checkbox" [checked]="el.discoverFilters.genres.includes(genre.id)" (change)="$event.target.checked ? el.discoverFilters.genres.push(genre.id) : el.discoverFilters.genres.splice(el.discoverFilters.genres.indexOf(genre.id), 1); fetchTmdbDataForElement(el.id)" class="rounded bg-slate-800 border-slate-600 text-indigo-500 focus:ring-indigo-500">
+                                  <label class="flex items-center space-x-2 text-xs cursor-pointer hover:text-white text-[#8eaec4] transition-colors">
+                                      <input type="checkbox" [checked]="el.discoverFilters.genres.includes(genre.id)" (change)="$event.target.checked ? el.discoverFilters.genres.push(genre.id) : el.discoverFilters.genres.splice(el.discoverFilters.genres.indexOf(genre.id), 1); fetchTmdbDataForElement(el.id)" class="rounded bg-[#0a1724] border-[#254261] text-[#01b4e4] focus:ring-[#01b4e4]">
                                       <span>{{genre.name}}</span>
                                   </label>
                                 }
@@ -471,37 +533,37 @@
                          <div class="input-group">
                              <label class="label flex justify-between items-center">
                                  Link Group ID
-                                 <span class="text-[10px] font-normal text-indigo-400" title="Elements with same ID share content">?</span>
+                                 <span class="text-[10px] font-normal text-[#01b4e4]" title="Elements with same ID share content">?</span>
                              </label>
                              <input type="text" [ngModel]="el.linkGroup" (ngModelChange)="updateElementProperty('linkGroup', $event)" class="input" placeholder="e.g. hero-section">
-                             <p class="text-[10px] text-slate-500 mt-1">Drag layers onto each other to link them automatically.</p>
+                             <p class="text-[10px] text-[#64839e] mt-1">Drag layers onto each other to link them automatically.</p>
                          </div>
 
                         <div class="input-group">
                           <label class="label">Media Type</label>
-                          <div class="flex bg-slate-900 rounded p-1 border border-slate-700">
-                             <button (click)="updateElementProperty('tmdbItemType', 'movie')" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-indigo-600]="el.tmdbItemType === 'movie'" [class.text-white]="el.tmdbItemType === 'movie'" [class.text-slate-400]="el.tmdbItemType !== 'movie'">Movie</button>
-                             <button (click)="updateElementProperty('tmdbItemType', 'tv')" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-indigo-600]="el.tmdbItemType === 'tv'" [class.text-white]="el.tmdbItemType === 'tv'" [class.text-slate-400]="el.tmdbItemType !== 'tv'">TV Show</button>
+                          <div class="flex bg-[#0a1724] rounded p-1 border border-[#254261]">
+                             <button (click)="updateElementProperty('tmdbItemType', 'movie')" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-[#01b4e4]]="el.tmdbItemType === 'movie'" [class.text-[#0d253f]]="el.tmdbItemType === 'movie'" [class.text-[#8eaec4]]="el.tmdbItemType !== 'movie'">Movie</button>
+                             <button (click)="updateElementProperty('tmdbItemType', 'tv')" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-[#01b4e4]]="el.tmdbItemType === 'tv'" [class.text-[#0d253f]]="el.tmdbItemType === 'tv'" [class.text-[#8eaec4]]="el.tmdbItemType !== 'tv'">TV Show</button>
                           </div>
                         </div>
                         
                         <div class="input-group relative">
                           <label class="label">Quick Search</label>
                           <div class="relative">
-                              <input type="text" #searchInput (keyup)="searchTmdb(searchInput.value)" placeholder="Type movie name..." class="input pl-8">
-                              <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-slate-500 text-xs"></i>
+                              <input type="text" #searchInput (keyup)="searchTmdb(searchInput.value)" placeholder="Type movie name..." class="input pl-10">
+                              <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[#64839e] text-xs"></i>
                           </div>
                           
-                          @if (isSearching()) { <div class="absolute right-2 top-8 text-xs text-slate-400"><i class="fa-solid fa-spinner fa-spin"></i></div> }
+                          @if (isSearching()) { <div class="absolute right-2 top-8 text-xs text-[#64839e]"><i class="fa-solid fa-spinner fa-spin"></i></div> }
                           
                           @if(tmdbSearchResults().length > 0) {
-                            <div class="absolute z-50 w-full bg-slate-900 border border-slate-700 rounded-lg mt-1 max-h-64 overflow-y-auto shadow-2xl custom-scrollbar">
+                            <div class="absolute z-50 w-full bg-[#0a1724] border border-[#254261] rounded-lg mt-1 max-h-64 overflow-y-auto shadow-2xl custom-scrollbar">
                               @for(item of tmdbSearchResults(); track item.id) {
-                                <button (click)="selectTmdbItem(item); searchInput.value = ''" class="w-full text-left p-2 hover:bg-indigo-600/20 hover:border-l-2 hover:border-indigo-500 flex items-start gap-3 border-b border-slate-800 last:border-0 transition-all">
-                                  <img [src]="'https://image.tmdb.org/t/p/w92' + (item.poster_path || item.profile_path)" class="w-8 h-12 object-cover rounded bg-slate-800 shrink-0">
+                                <button (click)="selectTmdbItem(item); searchInput.value = ''" class="w-full text-left p-2 hover:bg-[#01b4e4]/20 hover:border-l-2 hover:border-[#01b4e4] flex items-start gap-3 border-b border-[#183352] last:border-0 transition-all">
+                                  <img [src]="'https://image.tmdb.org/t/p/w92' + (item.poster_path || item.profile_path)" class="w-8 h-12 object-cover rounded bg-[#183352] shrink-0">
                                   <div class="min-w-0">
                                       <p class="font-semibold text-slate-200 truncate text-xs">{{ item.title || item.name }}</p>
-                                      <p class="text-[10px] text-slate-500">{{ item.release_date || item.first_air_date | slice:0:4 }}</p>
+                                      <p class="text-[10px] text-[#64839e]">{{ item.release_date || item.first_air_date | slice:0:4 }}</p>
                                   </div>
                                 </button>
                               }
@@ -520,16 +582,43 @@
                   </div>
                 </details>
               }
+              
+              <!-- DYNAMIC FIELD PROPERTIES -->
+              @if(el.type === 'tmdb-dynamic-field') {
+                <details class="accordion" open>
+                    <summary class="text-[#01b4e4]">Data Binding</summary>
+                    <div class="accordion-content space-y-3">
+                        <div class="input-group">
+                            <label class="label flex justify-between">
+                                Data Property Path
+                                <span class="text-xs text-[#64839e]" title="Dot notation path to JSON data">?</span>
+                            </label>
+                            <input type="text" [ngModel]="el.dataPath" (ngModelChange)="updateElementProperty('dataPath', $event)" class="input font-mono text-xs text-[#01b4e4]" placeholder="e.g. budget, credits.cast.0.name">
+                            <p class="text-[10px] text-[#64839e] mt-1">Use dot notation. Examples:<br><code>vote_count</code>, <code>budget</code>, <code>production_companies.0.name</code></p>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="input-group">
+                                <label class="label">Prefix</label>
+                                <input type="text" [ngModel]="el.dataPrefix" (ngModelChange)="updateElementProperty('dataPrefix', $event)" class="input" placeholder="e.g. Budget: $">
+                            </div>
+                            <div class="input-group">
+                                <label class="label">Suffix</label>
+                                <input type="text" [ngModel]="el.dataSuffix" (ngModelChange)="updateElementProperty('dataSuffix', $event)" class="input" placeholder="e.g. USD">
+                            </div>
+                        </div>
+                    </div>
+                </details>
+              }
 
               <!-- Content Specific -->
               @if(el.type === 'text') { 
-                  <div class="p-4 border-b border-slate-800">
+                  <div class="p-4 border-b border-[#183352]">
                       <label class="label">Text Content</label>
                       <textarea [ngModel]="el.content" (ngModelChange)="updateElementProperty('content', $event)" rows="3" class="textarea resize-y"></textarea>
                   </div>
               }
               @if(el.type === 'image') { 
-                  <div class="p-4 border-b border-slate-800">
+                  <div class="p-4 border-b border-[#183352]">
                       <label class="label">Image Source URL</label>
                       <input type="text" [ngModel]="el.content" (ngModelChange)="updateElementProperty('content', $event)" class="input text-xs">
                   </div> 
@@ -548,10 +637,13 @@
                     <div><label class="label">Height</label><input type="number" [ngModel]="el.height" (ngModelChange)="updateElementProperty('height', +$event)" class="input"></div>
                   </div>
                   <div class="col-span-2">
-                    <div class="flex justify-between mb-1"><label class="label">Rotation</label><span class="text-xs text-slate-400">{{el.rotation}}°</span></div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex justify-between mb-1"><label class="label">Rotation</label><span class="text-xs text-[#64839e]">{{el.rotation}}°</span></div>
+                    <div class="flex items-center gap-3 bg-[#0a1724] p-2 rounded border border-[#254261]">
                         <input type="range" min="0" max="360" [ngModel]="el.rotation" (ngModelChange)="updateElementProperty('rotation', +$event)" class="flex-1">
-                        <input type="number" [ngModel]="el.rotation" (ngModelChange)="updateElementProperty('rotation', +$event)" class="input w-16 text-center">
+                        <div class="relative w-16">
+                             <input type="number" [ngModel]="el.rotation" (ngModelChange)="updateElementProperty('rotation', +$event)" class="input w-full text-center h-8 pr-1">
+                             <span class="absolute right-2 top-1.5 text-[#64839e] text-xs pointer-events-none">°</span>
+                        </div>
                     </div>
                   </div>
                 </div>
@@ -566,10 +658,10 @@
                  @if(['image', 'tmdb-poster', 'tmdb-backdrop', 'tmdb-logo', 'tmdb-network-logo'].includes(el.type)) {
                      <div>
                          <label class="label">Image Fit</label>
-                         <div class="flex bg-slate-900 rounded border border-slate-700 p-1">
-                             <button (click)="updateElementProperty('imageFit', 'cover')" class="flex-1 py-1 rounded text-xs transition-colors" [class.bg-indigo-600]="el.imageFit === 'cover'" [class.text-white]="el.imageFit === 'cover'" [class.text-slate-400]="el.imageFit !== 'cover'">Cover</button>
-                             <button (click)="updateElementProperty('imageFit', 'contain')" class="flex-1 py-1 rounded text-xs transition-colors" [class.bg-indigo-600]="el.imageFit === 'contain'" [class.text-white]="el.imageFit === 'contain'" [class.text-slate-400]="el.imageFit !== 'contain'">Contain</button>
-                             <button (click)="updateElementProperty('imageFit', 'fill')" class="flex-1 py-1 rounded text-xs transition-colors" [class.bg-indigo-600]="el.imageFit === 'fill'" [class.text-white]="el.imageFit === 'fill'" [class.text-slate-400]="el.imageFit !== 'fill'">Fill</button>
+                         <div class="flex bg-[#0a1724] rounded border border-[#254261] p-1">
+                             <button (click)="updateElementProperty('imageFit', 'cover')" class="flex-1 py-1 rounded text-xs transition-colors" [class.bg-[#01b4e4]]="el.imageFit === 'cover'" [class.text-[#0d253f]]="el.imageFit === 'cover'" [class.text-[#8eaec4]]="el.imageFit !== 'cover'">Cover</button>
+                             <button (click)="updateElementProperty('imageFit', 'contain')" class="flex-1 py-1 rounded text-xs transition-colors" [class.bg-[#01b4e4]]="el.imageFit === 'contain'" [class.text-[#0d253f]]="el.imageFit === 'contain'" [class.text-[#8eaec4]]="el.imageFit !== 'contain'">Contain</button>
+                             <button (click)="updateElementProperty('imageFit', 'fill')" class="flex-1 py-1 rounded text-xs transition-colors" [class.bg-[#01b4e4]]="el.imageFit === 'fill'" [class.text-[#0d253f]]="el.imageFit === 'fill'" [class.text-[#8eaec4]]="el.imageFit !== 'fill'">Fill</button>
                          </div>
                      </div>
                  }
@@ -581,22 +673,22 @@
                         <input type="text" [ngModel]="el.styles.backgroundColor" (ngModelChange)="updateElementStyle('backgroundColor', $event)" class="input text-xs uppercase">
                     </div>
                     
-                    <div class="flex justify-between mb-1"><label class="label text-[10px]">BG Opacity</label><span class="text-xs text-slate-400">{{Math.round((el.styles.backgroundOpacity ?? 1) * 100)}}%</span></div>
+                    <div class="flex justify-between mb-1"><label class="label text-[10px]">BG Opacity: {{Math.round((el.styles.backgroundOpacity ?? 1) * 100)}}%</label></div>
                     <input type="range" min="0" max="1" step="0.01" [ngModel]="el.styles.backgroundOpacity ?? 1" (ngModelChange)="updateElementStyle('backgroundOpacity', +$event)">
                  </div>
 
                  <div>
-                    <div class="flex justify-between mb-1"><label class="label">Element Opacity</label><span class="text-xs text-slate-400">{{Math.round(el.styles.opacity * 100)}}%</span></div>
+                    <div class="flex justify-between mb-1"><label class="label">Element Opacity: {{Math.round(el.styles.opacity * 100)}}%</label></div>
                     <input type="range" min="0" max="1" step="0.01" [ngModel]="el.styles.opacity" (ngModelChange)="updateElementStyle('opacity', +$event)">
                  </div>
 
                  <div>
-                     <div class="flex justify-between mb-1"><label class="label">Border Radius</label><span class="text-xs text-slate-400">{{el.styles.borderRadius}}px</span></div>
+                     <div class="flex justify-between mb-1"><label class="label">Border Radius: {{el.styles.borderRadius}}px</label></div>
                      <input type="range" min="0" max="100" [ngModel]="el.styles.borderRadius" (ngModelChange)="updateElementStyle('borderRadius', +$event)">
                  </div>
                  
                  <div>
-                    <div class="flex justify-between mb-1"><label class="label">Blur Filter</label><span class="text-xs text-slate-400">{{el.styles.filterBlur}}px</span></div>
+                    <div class="flex justify-between mb-1"><label class="label">Blur Filter: {{el.styles.filterBlur}}px</label></div>
                     <input type="range" min="0" max="20" [ngModel]="el.styles.filterBlur" (ngModelChange)="updateElementStyle('filterBlur', +$event)">
                  </div>
 
@@ -617,10 +709,10 @@
                   </div>
                   <div>
                       <label class="label">Alignment</label>
-                      <div class="flex bg-slate-900 rounded border border-slate-700 p-1">
-                        <button (click)="updateElementStyle('textAlign', 'left')" class="flex-1 py-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors" [class.text-indigo-400]="el.styles.textAlign === 'left'"><i class="fa-solid fa-align-left"></i></button>
-                        <button (click)="updateElementStyle('textAlign', 'center')" class="flex-1 py-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors" [class.text-indigo-400]="el.styles.textAlign === 'center'"><i class="fa-solid fa-align-center"></i></button>
-                        <button (click)="updateElementStyle('textAlign', 'right')" class="flex-1 py-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors" [class.text-indigo-400]="el.styles.textAlign === 'right'"><i class="fa-solid fa-align-right"></i></button>
+                      <div class="flex bg-[#0a1724] rounded border border-[#254261] p-1">
+                        <button (click)="updateElementStyle('textAlign', 'left')" class="flex-1 py-1 rounded text-[#64839e] hover:text-white hover:bg-[#183352] transition-colors" [class.text-[#01b4e4]]="el.styles.textAlign === 'left'"><i class="fa-solid fa-align-left"></i></button>
+                        <button (click)="updateElementStyle('textAlign', 'center')" class="flex-1 py-1 rounded text-[#64839e] hover:text-white hover:bg-[#183352] transition-colors" [class.text-[#01b4e4]]="el.styles.textAlign === 'center'"><i class="fa-solid fa-align-center"></i></button>
+                        <button (click)="updateElementStyle('textAlign', 'right')" class="flex-1 py-1 rounded text-[#64839e] hover:text-white hover:bg-[#183352] transition-colors" [class.text-[#01b4e4]]="el.styles.textAlign === 'right'"><i class="fa-solid fa-align-right"></i></button>
                       </div>
                   </div>
                   <div><label class="label">Text Color</label>
@@ -634,12 +726,12 @@
               }
             </div>
         } @else if (activeRightPanelTab() === 'properties') {
-            <div class="h-full flex flex-col items-center justify-center text-slate-600 p-6 text-center">
-                <div class="w-16 h-16 rounded-full bg-slate-900 flex items-center justify-center mb-4 shadow-inner">
+            <div class="h-full flex flex-col items-center justify-center text-[#64839e] p-6 text-center">
+                <div class="w-16 h-16 rounded-full bg-[#06121e] flex items-center justify-center mb-4 shadow-inner">
                     <i class="fa-solid fa-arrow-pointer text-2xl opacity-50"></i>
                 </div>
-                <h3 class="text-slate-400 font-medium mb-2">No Selection</h3>
-                <p class="text-xs text-slate-500">Select an element on the canvas to edit its properties.</p>
+                <h3 class="text-[#8eaec4] font-medium mb-2">No Selection</h3>
+                <p class="text-xs text-[#64839e]">Select an element on the canvas to edit its properties.</p>
             </div>
         }
     </div>
