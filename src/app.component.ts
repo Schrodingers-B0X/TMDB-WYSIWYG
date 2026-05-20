@@ -96,11 +96,15 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   private destroy$ = new Subject<void>();
   private tmdbFetchSequence = 0;
   private tmdbFetchTokens: Map<string, number> = new Map();
+  private lastMiddleClickAt = 0;
   private readonly projectStorageKey = 'tmdbLayoutProject';
   private readonly maxHistoryStates = 50;
   private readonly defaultCollectionItemLimit = 20;
   private readonly maxCollectionItemLimit = 40;
   private readonly sceneFadeDurationMs = 650;
+  private readonly minZoom = 0.1;
+  private readonly maxZoom = 2;
+  private readonly middleClickResetWindowMs = 350;
   private restoredProjectFromStorage = false;
 
   readonly Math = Math;
@@ -600,9 +604,9 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
       if (!viewport) {
           const preset = presetOverride || this.selectedPreset();
-          if (preset === 'tv') this.zoomLevel.set(0.45);
-          else if (preset === 'tablet') this.zoomLevel.set(0.75);
-          else this.zoomLevel.set(1.0);
+          if (preset === 'tv') this.setCanvasZoom(0.45);
+          else if (preset === 'tablet') this.setCanvasZoom(0.75);
+          else this.setCanvasZoom(1.0);
           return;
       }
 
@@ -612,8 +616,58 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       const availableWidth = Math.max(1, viewport.clientWidth - paddingX - 48);
       const availableHeight = Math.max(1, viewport.clientHeight - paddingY - 72);
       const fitScale = Math.min(availableWidth / width, availableHeight / height);
-      const clampedScale = Math.min(2, Math.max(0.1, fitScale));
+      this.setCanvasZoom(fitScale);
+  }
+
+  setCanvasZoom(value: number) {
+      const clampedScale = Math.min(this.maxZoom, Math.max(this.minZoom, value));
       this.zoomLevel.set(Math.round(clampedScale * 100) / 100);
+  }
+
+  zoomCanvasWithWheel(event: WheelEvent) {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('.zoom-overlay')) return;
+
+      event.preventDefault();
+      const viewport = event.currentTarget as HTMLElement;
+      const oldZoom = this.zoomLevel();
+      const nextZoom = Math.min(this.maxZoom, Math.max(this.minZoom, oldZoom * Math.exp(-event.deltaY * 0.0015)));
+      if (nextZoom === oldZoom) return;
+
+      const rect = viewport.getBoundingClientRect();
+      const pointerX = event.clientX - rect.left;
+      const pointerY = event.clientY - rect.top;
+      const contentX = viewport.scrollLeft + pointerX;
+      const contentY = viewport.scrollTop + pointerY;
+      const zoomRatio = nextZoom / oldZoom;
+
+      this.setCanvasZoom(nextZoom);
+
+      requestAnimationFrame(() => {
+          viewport.scrollLeft = contentX * zoomRatio - pointerX;
+          viewport.scrollTop = contentY * zoomRatio - pointerY;
+      });
+  }
+
+  handleCanvasViewportMouseDown(event: MouseEvent) {
+      if (event.button !== 1) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      const now = window.performance.now();
+      if (now - this.lastMiddleClickAt <= this.middleClickResetWindowMs) {
+          this.lastMiddleClickAt = 0;
+          this.fitCanvasToScreen();
+          return;
+      }
+
+      this.lastMiddleClickAt = now;
+  }
+
+  preventCanvasAuxClick(event: MouseEvent) {
+      if (event.button !== 1) return;
+      event.preventDefault();
+      event.stopPropagation();
   }
 
   // --- PROJECT PERSISTENCE ---
@@ -816,6 +870,11 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     if(id) {
         this.tmdbSearchResults.set([]);
     }
+  }
+
+  selectElementFromPointer(event: MouseEvent, id: string) {
+    if (event.button === 1) return;
+    this.selectElement(id);
   }
 
   deselectCanvas(event: MouseEvent) { if ((event.target as HTMLElement).id === 'canvas-bg') this.selectedElementId.set(null); }

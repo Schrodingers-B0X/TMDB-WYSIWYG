@@ -1,6 +1,16 @@
 # Changelog
 
-## v3.0.0 - Scene-Synchronised Slideshows
+## v2.1.0 - Canvas Viewport Zoom Controls
+
+This update improves canvas navigation inside the editor viewport.
+
+### Highlights
+
+- Added mouse-wheel scroll-to-zoom directly on the canvas viewport.
+- Added mouse-wheel button double-click to reset the view using the same behavior as the `Fit` button.
+- Kept zoom clamped to the existing `10%` to `200%` range and preserved the zoom slider as a visible control.
+
+## v2.0.0 - Scene-Synchronised Slideshows
 
 This major release makes TMDB collection slides behave as one synchronised scene. A backdrop slideshow can now act as the scene source for poster, overview, cast, rating, logo, and dynamic-field layers, with every linked layer using the same movie or TV item during each slide.
 
