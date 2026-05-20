@@ -631,7 +631,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       event.preventDefault();
       const viewport = event.currentTarget as HTMLElement;
       const oldZoom = this.zoomLevel();
-      const nextZoom = Math.min(this.maxZoom, Math.max(this.minZoom, oldZoom * Math.exp(-event.deltaY * 0.0005;
+      const nextZoom = Math.min(this.maxZoom, Math.max(this.minZoom, oldZoom * Math.exp(-event.deltaY * 0.0005)));
       if (nextZoom === oldZoom) return;
 
       const rect = viewport.getBoundingClientRect();
