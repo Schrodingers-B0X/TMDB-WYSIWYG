@@ -27,6 +27,7 @@ type ElementType =
 
 type ImageFit = 'cover' | 'contain' | 'fill';
 type BackdropFitMode = 'width' | 'height' | 'cover';
+type ElementSizeProperty = 'width' | 'height';
 type SlideshowState = {idx1: number, idx2: number, fade: boolean, sceneFade: boolean, backdrops: string[], items: any[]};
 type TmdbDetailEntry = { key: string; altKey: string; detail: any };
 
@@ -62,9 +63,14 @@ interface CanvasElement {
   discoverFilters: DiscoverFilters;
   tmdbData?: any;
   linkGroup?: string;
+  syncedToElementId?: string;
   imageFit: ImageFit;
   collectionItemLimit?: number;
   globalSceneFade?: boolean;
+  slideshowDurationMs?: number;
+  snapToGrid?: boolean;
+  snapIncrement?: number;
+  maintainAspectRatio?: boolean;
 
   // For Dynamic Data Fields
   dataPath?: string;
@@ -72,7 +78,7 @@ interface CanvasElement {
   dataSuffix?: string;
 }
 
-interface HistoryState { elements: CanvasElement[]; selectedElementId: string | null; }
+interface HistoryState { elements: CanvasElement[]; selectedElementId: string | null; selectedElementIds?: string[]; multiSelectMode?: boolean; }
 interface ContextMenuState { visible: boolean; x: number; y: number; elementId: string | null; }
 interface TmdbGenre { id: number; name: string; }
 interface TmdbUser { id: number; username: string; avatar_path: string | null; name: string; }
@@ -101,6 +107,11 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly maxHistoryStates = 50;
   private readonly defaultCollectionItemLimit = 20;
   private readonly maxCollectionItemLimit = 40;
+  private readonly defaultSlideshowDurationMs = 5000;
+  private readonly minSlideshowDurationMs = 1000;
+  private readonly maxSlideshowDurationMs = 60000;
+  private readonly defaultSnapIncrement = 20;
+  private readonly posterAspectRatio = 2 / 3;
   private readonly sceneFadeDurationMs = 650;
   private readonly minZoom = 0.1;
   private readonly maxZoom = 2;
@@ -109,6 +120,8 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   readonly Math = Math;
   readonly collectionItemLimitOptions = [5, 10, 15, 20, 30, 40];
+  readonly snapIncrementOptions = [5, 10, 20, 25, 50, 100];
+  readonly slideshowDurationOptions = [3, 5, 8, 10, 15, 30];
 
   // --- CONSTANTS & STATIC DATA ---
   readonly countries = COUNTRIES;
@@ -147,6 +160,8 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   // --- STATE SIGNALS ---
   elements = signal<CanvasElement[]>([]);
   selectedElementId = signal<string | null>(null);
+  selectedElementIds = signal<string[]>([]);
+  multiSelectMode = signal(false);
 
   // Auth Settings
   authMethod = signal<'v3' | 'v4'>((localStorage.getItem('tmdbAuthMethod') as 'v3' | 'v4') || 'v4');
@@ -226,6 +241,11 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   });
 
   selectedElement = computed(() => this.elements().find(el => el.id === this.selectedElementId()));
+  selectedElements = computed(() => {
+    const ids = new Set(this.selectedElementIds());
+    return this.elements().filter(el => ids.has(el.id));
+  });
+  hasMultiSelection = computed(() => this.multiSelectMode() && this.selectedElementIds().length > 1);
   generatedPhpCode = signal('');
   copySuccess = signal(false);
 
@@ -241,10 +261,10 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         tmdbId: el.tmdbId || '',
         tmdbItemType: el.tmdbItemType,
         tmdbCollectionType: el.tmdbCollectionType,
-        tmdbEndpoint: el.tmdbEndpoint || '',
-        discoverFilters: el.discoverFilters,
-        collectionItemLimit: this.isCollectionElement(el) ? this.getEffectiveCollectionItemLimit(el) : '',
-        linkGroup: el.linkGroup || ''
+      tmdbEndpoint: el.tmdbEndpoint || '',
+      discoverFilters: el.discoverFilters,
+      collectionItemLimit: this.isCollectionElement(el) ? this.getEffectiveCollectionItemLimit(el) : '',
+      linkGroup: el.linkGroup || ''
       }))
     );
   });
@@ -279,8 +299,57 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   });
 
   selectedSyncLayerId(element: CanvasElement): string {
-    if (!element.linkGroup) return '';
-    return this.syncLayerOptions().find(option => option.linkGroup === element.linkGroup)?.id || '';
+    if (!element.syncedToElementId) return '';
+    return this.elements().some(option => option.id === element.syncedToElementId && option.type.startsWith('tmdb-'))
+      ? element.syncedToElementId
+      : '';
+  }
+
+  isDynamicElement(elementId: string | null): boolean {
+    if (!elementId) return false;
+    return this.elements().some(el => el.id === elementId && el.type.startsWith('tmdb-'));
+  }
+
+  isSnapEnabled(elementId: string | null): boolean {
+    if (!elementId) return false;
+    return !!this.elements().find(el => el.id === elementId)?.snapToGrid;
+  }
+
+  isElementSelected(elementId: string): boolean {
+    return this.selectedElementIds().includes(elementId);
+  }
+
+  isElementInMultiSelection(elementId: string | null): boolean {
+    return !!elementId && this.selectedElementIds().includes(elementId);
+  }
+
+  canCreateSelectionBackground(): boolean {
+    return this.selectedElementIds().length >= 2;
+  }
+
+  isSyncedWithLayer(element: CanvasElement): boolean {
+    return !!this.selectedSyncLayerId(element);
+  }
+
+  private getSnapIncrement(element: CanvasElement): number {
+    const parsed = Number(element.snapIncrement);
+    if (!Number.isFinite(parsed) || parsed <= 0) return this.defaultSnapIncrement;
+    return Math.max(1, Math.round(parsed));
+  }
+
+  private snapValue(value: number, increment: number): number {
+    if (!Number.isFinite(value) || !Number.isFinite(increment) || increment <= 0) return value;
+    return Math.round(value / increment) * increment;
+  }
+
+  private maybeSnapValue(element: CanvasElement, value: number): number {
+    return element.snapToGrid ? this.snapValue(value, this.getSnapIncrement(element)) : value;
+  }
+
+  private normalizeSnapIncrement(value: any): number {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return this.defaultSnapIncrement;
+    return Math.max(1, Math.min(500, Math.round(parsed)));
   }
 
   private isCollectionElementType(type: ElementType | string): boolean {
@@ -320,6 +389,33 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   getEffectiveGlobalSceneFade(element: CanvasElement, elements = this.elements()): boolean {
     const master = this.getCollectionMasterForElement(element, elements);
     return !!(master?.globalSceneFade ?? element.globalSceneFade);
+  }
+
+  private normalizeSlideshowDurationMs(value: any): number {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return this.defaultSlideshowDurationMs;
+    return Math.max(this.minSlideshowDurationMs, Math.min(this.maxSlideshowDurationMs, Math.round(parsed)));
+  }
+
+  getSlideshowMasterForElement(element: CanvasElement, elements = this.elements()): CanvasElement | null {
+    const explicitSource = element.syncedToElementId
+      ? elements.find(el => el.id === element.syncedToElementId && el.type === 'tmdb-backdrop-slideshow')
+      : null;
+    if (explicitSource) return explicitSource;
+    if (element.type === 'tmdb-backdrop-slideshow') return element;
+    if (!element.linkGroup) return null;
+    return elements
+      .filter(el => el.linkGroup === element.linkGroup && el.type === 'tmdb-backdrop-slideshow')
+      .sort((a, b) => a.zIndex - b.zIndex)[0] || null;
+  }
+
+  getEffectiveSlideshowDurationMs(element: CanvasElement, elements = this.elements()): number {
+    const master = this.getSlideshowMasterForElement(element, elements);
+    return this.normalizeSlideshowDurationMs(master?.slideshowDurationMs ?? element.slideshowDurationMs);
+  }
+
+  getEffectiveSlideshowDurationSeconds(element: CanvasElement, elements = this.elements()): number {
+    return Math.round(this.getEffectiveSlideshowDurationMs(element, elements) / 1000);
   }
 
   getPosterScrollItems(element: CanvasElement): any[] {
@@ -459,14 +555,17 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       if (event.key === 'z') { event.preventDefault(); this.undo(); }
       if (event.key === 'y') { event.preventDefault(); this.redo(); }
     } else if (event.key === 'Delete' || event.key === 'Backspace') {
-      if (this.selectedElementId() && !isInputActive) {
+      if (this.selectedElementIds().length > 1 && !isInputActive) {
+             event.preventDefault();
+             this.deleteSelectedElements();
+      } else if (this.selectedElementId() && !isInputActive) {
              event.preventDefault();
              this.deleteElement(this.selectedElementId()!);
       }
     } else if (!isInputActive && this.selectedElementId()) {
         const el = this.selectedElement();
         if (el) {
-            const step = event.shiftKey ? 10 : 1;
+            const step = el.snapToGrid ? this.getSnapIncrement(el) * (event.shiftKey ? 5 : 1) : (event.shiftKey ? 10 : 1);
             let newX = el.x;
             let newY = el.y;
             let handled = false;
@@ -697,12 +796,18 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         sortBy: element.discoverFilters?.sortBy || 'popularity.desc',
         genres: (element.discoverFilters?.genres || []).map(Number).filter(Number.isFinite),
         year: element.discoverFilters?.year ? Number(element.discoverFilters.year) : null
-      }
+      },
+      snapToGrid: !!element.snapToGrid,
+      snapIncrement: this.normalizeSnapIncrement(element.snapIncrement),
+      maintainAspectRatio: element.type === 'tmdb-poster' ? element.maintainAspectRatio !== false : element.maintainAspectRatio
     };
     if (this.isCollectionElementType(normalized.type)) {
       normalized.collectionItemLimit = this.normalizeCollectionItemLimit(element.collectionItemLimit);
       normalized.globalSceneFade = !!element.globalSceneFade;
       normalized.tmdbId = undefined;
+    }
+    if (normalized.type === 'tmdb-backdrop-slideshow') {
+      normalized.slideshowDurationMs = this.normalizeSlideshowDurationMs(element.slideshowDurationMs);
     }
     return normalized;
   }
@@ -727,6 +832,8 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.elements.set(project.elements.map((el: CanvasElement) => this.normalizeElementForProject(el)));
     this.selectedElementId.set(null);
+    this.selectedElementIds.set([]);
+    this.multiSelectMode.set(false);
     this.history.set([]);
     this.historyIndex.set(-1);
     this.saveStateToHistory();
@@ -787,7 +894,12 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   // --- HISTORY MANAGEMENT ---
   saveStateToHistory() {
     setTimeout(() => {
-      const currentState: HistoryState = { elements: JSON.parse(JSON.stringify(this.elements())), selectedElementId: this.selectedElementId() };
+      const currentState: HistoryState = {
+        elements: JSON.parse(JSON.stringify(this.elements())),
+        selectedElementId: this.selectedElementId(),
+        selectedElementIds: [...this.selectedElementIds()],
+        multiSelectMode: this.multiSelectMode()
+      };
       const lastState = this.history()[this.historyIndex()];
       if (lastState && JSON.stringify(lastState.elements) === JSON.stringify(currentState.elements)) return;
 
@@ -807,6 +919,8 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     if (state) {
       this.elements.set(state.elements);
       this.selectedElementId.set(state.selectedElementId);
+      this.selectedElementIds.set(state.selectedElementIds || (state.selectedElementId ? [state.selectedElementId] : []));
+      this.multiSelectMode.set(!!state.multiSelectMode);
       state.elements.forEach(el => {
         if (el.type === 'tmdb-backdrop-slideshow') this.setupSlideshow(el.id);
         if (el.type === 'tmdb-poster-scroll') this.setupPosterScroll(el.id);
@@ -815,8 +929,9 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   // --- ELEMENT MANIPULATION ---
-  addElement(type: ElementType, itemType: TmdbItemType = 'movie', collectionType: TmdbCollectionType = 'movie') {
+  addElement(type: ElementType, itemType: TmdbItemType = 'movie', collectionType?: TmdbCollectionType) {
     const isLogo = type === 'tmdb-logo' || type === 'tmdb-network-logo';
+    const resolvedCollectionType = collectionType || (itemType === 'tv' ? 'tv' : 'movie');
     const currentScale = this.canvasConfig().width / 1920;
     const baseScale = this.selectedPreset() === 'mobile' ? 1 : (this.selectedPreset() === 'tablet' ? 1.5 : 2.5);
 
@@ -832,11 +947,15 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
           color: '#f1f5f9', fontFamily: 'Inter', fontSize: 16 * baseScale, fontWeight: '400', textAlign: 'left', borderRadius: 8, borderWidth: 0, borderColor: '#f1f5f9', opacity: 1, filterBlur: 0, filterGrayscale: 0
       },
       tmdbItemType: itemType,
-      tmdbCollectionType: collectionType,
+      tmdbCollectionType: resolvedCollectionType,
       discoverFilters: { sortBy: 'popularity.desc', genres: [], year: null },
       imageFit: isLogo ? 'contain' : 'cover',
       collectionItemLimit: this.isCollectionElementType(type) ? this.defaultCollectionItemLimit : undefined,
       globalSceneFade: false,
+      slideshowDurationMs: type === 'tmdb-backdrop-slideshow' ? this.defaultSlideshowDurationMs : undefined,
+      snapToGrid: false,
+      snapIncrement: this.defaultSnapIncrement,
+      maintainAspectRatio: type === 'tmdb-poster',
       linkGroup: '',
       dataPath: '',
       dataPrefix: '',
@@ -858,15 +977,45 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   deleteElement(id: string) {
-    this.elements.update(els => els.filter(el => el.id !== id));
-    if (this.selectedElementId() === id) this.selectedElementId.set(null);
+    this.elements.update(els => els
+      .filter(el => el.id !== id)
+      .map(el => el.syncedToElementId === id ? { ...el, syncedToElementId: undefined, linkGroup: '' } : el)
+    );
+    const remainingSelection = this.selectedElementIds().filter(selectedId => selectedId !== id);
+    this.selectedElementIds.set(remainingSelection);
+    if (this.selectedElementId() === id) this.selectedElementId.set(remainingSelection[remainingSelection.length - 1] || null);
+    if (remainingSelection.length === 0) this.multiSelectMode.set(false);
     if(this.slideshowIntervals.has(id)) { clearInterval(this.slideshowIntervals.get(id)); this.slideshowIntervals.delete(id); }
     if(this.posterScrollIntervals.has(id)) { clearInterval(this.posterScrollIntervals.get(id)); this.posterScrollIntervals.delete(id); }
     this.saveStateToHistory();
   }
 
+  deleteSelectedElements() {
+    const ids = this.selectedElementIds();
+    if (ids.length === 0) return;
+    ids.forEach(id => {
+      if(this.slideshowIntervals.has(id)) { clearInterval(this.slideshowIntervals.get(id)); this.slideshowIntervals.delete(id); }
+      if(this.posterScrollIntervals.has(id)) { clearInterval(this.posterScrollIntervals.get(id)); this.posterScrollIntervals.delete(id); }
+    });
+    const idSet = new Set(ids);
+    this.elements.update(els => els
+      .filter(el => !idSet.has(el.id))
+      .map(el => el.syncedToElementId && idSet.has(el.syncedToElementId) ? { ...el, syncedToElementId: undefined, linkGroup: '' } : el)
+    );
+    this.selectedElementId.set(null);
+    this.selectedElementIds.set([]);
+    this.multiSelectMode.set(false);
+    this.saveStateToHistory();
+  }
+
   selectElement(id: string | null) {
+    if (this.multiSelectMode() && id) {
+      this.toggleElementInMultiSelection(id);
+      return;
+    }
+
     this.selectedElementId.set(id);
+    this.selectedElementIds.set(id ? [id] : []);
     if(id) {
         this.tmdbSearchResults.set([]);
     }
@@ -874,10 +1023,116 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   selectElementFromPointer(event: MouseEvent, id: string) {
     if (event.button === 1) return;
+    if (this.multiSelectMode()) {
+      event.stopPropagation();
+      this.toggleElementInMultiSelection(id);
+      return;
+    }
     this.selectElement(id);
   }
 
-  deselectCanvas(event: MouseEvent) { if ((event.target as HTMLElement).id === 'canvas-bg') this.selectedElementId.set(null); }
+  deselectCanvas(event: MouseEvent) {
+    if ((event.target as HTMLElement).id !== 'canvas-bg') return;
+    this.selectedElementId.set(null);
+    this.selectedElementIds.set([]);
+    this.multiSelectMode.set(false);
+  }
+
+  toggleMultiSelectFromContext(elementId: string) {
+    if (!this.multiSelectMode()) {
+      this.multiSelectMode.set(true);
+      this.selectedElementId.set(elementId);
+      this.selectedElementIds.set([elementId]);
+    } else {
+      this.toggleElementInMultiSelection(elementId);
+    }
+    this.activeRightPanelTab.set('properties');
+    this.contextMenu.update(cm => ({ ...cm, visible: false }));
+  }
+
+  clearMultiSelection() {
+    this.multiSelectMode.set(false);
+    const selectedId = this.selectedElementId();
+    this.selectedElementIds.set(selectedId ? [selectedId] : []);
+    this.contextMenu.update(cm => ({ ...cm, visible: false }));
+  }
+
+  private toggleElementInMultiSelection(elementId: string) {
+    this.tmdbSearchResults.set([]);
+    this.selectedElementIds.update(ids => {
+      const exists = ids.includes(elementId);
+      const next = exists ? ids.filter(id => id !== elementId) : [...ids, elementId];
+      this.selectedElementId.set(next[next.length - 1] || null);
+      if (next.length === 0) this.multiSelectMode.set(false);
+      return next;
+    });
+  }
+
+  addBackgroundBehindSelection() {
+    const ids = this.selectedElementIds();
+    if (ids.length < 2) return;
+
+    const selected = this.elements().filter(el => ids.includes(el.id));
+    if (selected.length < 2) return;
+
+    const padding = 24;
+    const minX = Math.min(...selected.map(el => el.x));
+    const minY = Math.min(...selected.map(el => el.y));
+    const maxX = Math.max(...selected.map(el => el.x + el.width));
+    const maxY = Math.max(...selected.map(el => el.y + el.height));
+    const minZ = Math.min(...selected.map(el => el.zIndex));
+    const backgroundZ = Math.max(1, minZ - 1);
+    const backgroundId = `el_${Date.now()}`;
+
+    const background: CanvasElement = {
+      id: backgroundId,
+      type: 'shape',
+      x: minX - padding,
+      y: minY - padding,
+      width: (maxX - minX) + (padding * 2),
+      height: (maxY - minY) + (padding * 2),
+      rotation: 0,
+      zIndex: backgroundZ,
+      content: 'Group Background',
+      visible: true,
+      styles: {
+        backgroundColor: '#0d253f',
+        backgroundOpacity: 0.72,
+        color: '#f1f5f9',
+        fontFamily: 'Inter',
+        fontSize: 16,
+        fontWeight: '400',
+        textAlign: 'left',
+        borderRadius: 18,
+        borderWidth: 0,
+        borderColor: '#f1f5f9',
+        opacity: 1,
+        filterBlur: 0,
+        filterGrayscale: 0
+      },
+      tmdbItemType: 'movie',
+      tmdbCollectionType: 'movie',
+      discoverFilters: { sortBy: 'popularity.desc', genres: [], year: null },
+      imageFit: 'cover',
+      linkGroup: '',
+      dataPath: '',
+      dataPrefix: '',
+      dataSuffix: ''
+    };
+
+    const selectedIdSet = new Set(ids);
+    this.elements.update(els => [
+      ...els.map(el => selectedIdSet.has(el.id) && el.zIndex <= backgroundZ ? { ...el, zIndex: backgroundZ + 1 } : el),
+      background
+    ]);
+
+    this.multiSelectMode.set(false);
+    this.selectedElementId.set(backgroundId);
+    this.selectedElementIds.set([backgroundId]);
+    this.activeRightPanelTab.set('properties');
+    this.contextMenu.update(cm => ({ ...cm, visible: false }));
+    this.saveStateToHistory();
+  }
 
   bringToFront(id: string, saveHistory = true) {
     const maxZ = Math.max(...this.elements().map(e => e.zIndex), 0);
@@ -896,7 +1151,39 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   updateElementStyle(prop: keyof CanvasElement['styles'], value: any) { this.updateSelectedElement(el => { el.styles = { ...el.styles, [prop]: value }; }); }
 
   updateElementProperty(prop: keyof CanvasElement, value: any, noHistory = false) {
-      this.updateSelectedElement(el => { (el as any)[prop] = value; }, noHistory);
+      this.updateSelectedElement(el => {
+        if (prop === 'width' || prop === 'height') {
+          this.applySizePropertyUpdate(el, prop, value);
+          return;
+        }
+
+        if (prop === 'x' || prop === 'y') {
+          (el as any)[prop] = this.maybeSnapValue(el, Number(value));
+          return;
+        }
+
+        if (prop === 'snapIncrement') {
+          const increment = this.normalizeSnapIncrement(value);
+          el.snapIncrement = increment;
+          if (el.snapToGrid) {
+            el.x = this.snapValue(el.x, increment);
+            el.y = this.snapValue(el.y, increment);
+          }
+          return;
+        }
+
+        if (prop === 'tmdbId') {
+          el.tmdbId = value ? String(value) : '';
+          if (el.tmdbId) el.tmdbEndpoint = undefined;
+          el.tmdbData = null;
+          return;
+        }
+
+        (el as any)[prop] = value;
+        if (prop === 'tmdbItemType' || prop === 'tmdbCollectionType' || prop === 'tmdbEndpoint') {
+          el.tmdbData = null;
+        }
+      }, noHistory);
 
       if (prop === 'tmdbId') {
          const el = this.selectedElement();
@@ -906,6 +1193,95 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 	         this.fetchTmdbDataForElement(el.id);
 	     }
       }
+  }
+
+  private applySizePropertyUpdate(element: CanvasElement, prop: ElementSizeProperty, value: any) {
+    const nextValue = Math.max(1, Number(value) || 1);
+
+    if (element.type === 'tmdb-poster' && element.maintainAspectRatio !== false) {
+      if (prop === 'width') {
+        element.width = Math.max(1, this.maybeSnapValue(element, nextValue));
+        element.height = element.width / this.posterAspectRatio;
+      } else {
+        element.height = Math.max(1, this.maybeSnapValue(element, nextValue));
+        element.width = element.height * this.posterAspectRatio;
+      }
+      return;
+    }
+
+    element[prop] = Math.max(1, this.maybeSnapValue(element, nextValue));
+  }
+
+  updateTmdbSourceType(elementId: string, value: TmdbCollectionType) {
+    const selected = this.elements().find(el => el.id === elementId);
+    if (!selected || this.isSyncedWithLayer(selected)) return;
+
+    const endpointIsValid = (endpoint?: string) =>
+      !endpoint || (this.tmdbEndpoints[value] || []).some(option => option.key === endpoint);
+
+    this.elements.update(els => els.map(el => {
+      if (el.id !== elementId) return el;
+      const nextEndpoint = endpointIsValid(el.tmdbEndpoint) ? el.tmdbEndpoint : undefined;
+      return {
+        ...el,
+        tmdbCollectionType: value,
+        tmdbItemType: value === 'tv' ? 'tv' : 'movie',
+        tmdbEndpoint: nextEndpoint,
+        tmdbData: null
+      };
+    }));
+
+    const latest = this.elements().find(el => el.id === elementId);
+    if (latest?.tmdbEndpoint || latest?.tmdbId) this.fetchTmdbDataForElement(elementId);
+    this.saveStateToHistory();
+  }
+
+  updateTmdbEndpoint(elementId: string, value: string) {
+    const selected = this.elements().find(el => el.id === elementId);
+    if (!selected || this.isSyncedWithLayer(selected)) return;
+
+    const endpoint = value || undefined;
+    this.elements.update(els => els.map(el => el.id === elementId ? {
+      ...el,
+      tmdbEndpoint: endpoint,
+      tmdbId: endpoint ? '' : el.tmdbId,
+      tmdbData: null
+    } : el));
+
+    if (endpoint) this.fetchTmdbDataForElement(elementId);
+    this.saveStateToHistory();
+  }
+
+  toggleSnapToGrid(elementId: string, value?: boolean) {
+    const element = this.elements().find(el => el.id === elementId);
+    if (!element) return;
+    const enabled = value ?? !element.snapToGrid;
+
+    this.elements.update(els => els.map(el => {
+      if (el.id !== elementId) return el;
+      const snapIncrement = this.normalizeSnapIncrement(el.snapIncrement);
+      return {
+        ...el,
+        snapToGrid: enabled,
+        snapIncrement,
+        x: enabled ? this.snapValue(el.x, snapIncrement) : el.x,
+        y: enabled ? this.snapValue(el.y, snapIncrement) : el.y
+      };
+    }));
+    this.saveStateToHistory();
+    this.contextMenu.update(cm => ({ ...cm, visible: false }));
+  }
+
+  updatePosterAspectRatio(elementId: string, value: boolean) {
+    this.elements.update(els => els.map(el => {
+      if (el.id !== elementId || el.type !== 'tmdb-poster') return el;
+      return {
+        ...el,
+        maintainAspectRatio: value,
+        height: value ? el.width / this.posterAspectRatio : el.height
+      };
+    }));
+    this.saveStateToHistory();
   }
 
   updateCollectionItemLimit(elementId: string, value: number) {
@@ -926,6 +1302,19 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
     const master = this.getCollectionMasterForElement(selected) || selected;
     this.elements.update(els => els.map(el => el.id === master.id ? { ...el, globalSceneFade: value } : el));
+    this.saveStateToHistory();
+  }
+
+  updateSlideshowDuration(elementId: string, seconds: number) {
+    const selected = this.elements().find(el => el.id === elementId);
+    if (!selected) return;
+
+    const master = this.getSlideshowMasterForElement(selected);
+    if (!master) return;
+
+    const durationMs = this.normalizeSlideshowDurationMs(Number(seconds) * 1000);
+    this.elements.update(els => els.map(el => el.id === master.id ? { ...el, slideshowDurationMs: durationMs } : el));
+    this.setupSlideshow(master.id);
     this.saveStateToHistory();
   }
 
@@ -1095,7 +1484,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   syncElementWithLayer(elementId: string, targetId: string) {
     if (!targetId) {
-      this.elements.update(els => els.map(el => el.id === elementId ? { ...el, linkGroup: '', tmdbData: null } : el));
+      this.elements.update(els => els.map(el => el.id === elementId ? { ...el, linkGroup: '', syncedToElementId: undefined, tmdbData: null } : el));
       this.saveStateToHistory();
       return;
     }
@@ -1115,12 +1504,14 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
           return {
             ...el,
             linkGroup: groupId,
+            syncedToElementId: targetId,
             tmdbData: null
           };
         }
         return {
           ...el,
           linkGroup: groupId,
+          syncedToElementId: targetId,
           tmdbId,
           tmdbItemType: itemType,
           tmdbData: null
@@ -1175,7 +1566,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   unlinkElement(id: string, event: MouseEvent) {
     event.stopPropagation();
-    this.elements.update(els => els.map(el => el.id === id ? { ...el, linkGroup: '' } : el));
+    this.elements.update(els => els.map(el => el.id === id ? { ...el, linkGroup: '', syncedToElementId: undefined } : el));
     this.saveStateToHistory();
   }
 
@@ -1253,6 +1644,18 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     );
   }
 
+  private enrichFirstEndpointItem(element: CanvasElement, data: any, headers: HttpHeaders): Observable<any> {
+    if (!data || !Array.isArray(data.results) || data.results.length === 0) return of(data);
+    const item = data.results.find((result: any) => result?.id) || data.results[0];
+    if (!item?.id) return of(data);
+
+    const fallbackType = element.tmdbCollectionType || element.tmdbItemType || 'movie';
+    return this.http.get<any>(this.buildTmdbDetailUrl(item, fallbackType), { headers }).pipe(
+      catchError(() => of(item)),
+      map(detail => detail || item)
+    );
+  }
+
   searchTmdb(query: string) { this.searchTerms.next(query); }
 
   selectTmdbItem(item: any) {
@@ -1271,7 +1674,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   propagateTmdbId(groupName: string, tmdbId: string, itemType: TmdbItemType, excludeElementId?: string) {
       this.elements.update(els => els.map(el => {
           if (el.linkGroup === groupName && el.id !== excludeElementId && !this.isCollectionElement(el)) {
-              return { ...el, tmdbId: tmdbId, tmdbItemType: itemType, tmdbData: null };
+              return { ...el, tmdbId: tmdbId, tmdbItemType: itemType, tmdbEndpoint: undefined, tmdbData: null };
           }
           return el;
       }));
@@ -1318,7 +1721,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
           if (element.discoverFilters.year) params.append(yearKey, element.discoverFilters.year.toString());
         }
         params.append('watch_region', this.watchRegion());
-        const itemLimit = this.getEffectiveCollectionItemLimit(element);
+        const itemLimit = this.isCollectionElement(element) ? this.getEffectiveCollectionItemLimit(element) : 1;
         const pageCount = Math.ceil(itemLimit / 20);
         const buildCollectionUrl = (page: number) => {
           const pageParams = new URLSearchParams(params.toString());
@@ -1340,7 +1743,12 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
           obs = this.http.get(buildCollectionUrl(1), { headers });
         }
 
-        obs = obs.pipe(switchMap(data => this.enrichCollectionDataForLinkedScene(element, data, headers)));
+        obs = obs.pipe(
+          switchMap(data => this.isCollectionElement(element)
+            ? this.enrichCollectionDataForLinkedScene(element, data, headers)
+            : this.enrichFirstEndpointItem(element, data, headers)
+          )
+        );
     } else { return; }
 
     obs.pipe(catchError(() => of(null)), takeUntil(this.destroy$)).subscribe(data => {
@@ -1349,6 +1757,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       const latest = this.elements().find(el => el.id === id);
       if (!latest) return;
       if (!this.isCollectionElement(latest)) {
+        if (requestEndpoint && (latest.tmdbEndpoint || '') !== requestEndpoint) return;
         if (requestTmdbId && String(latest.tmdbId || '') !== requestTmdbId) return;
         if (latest.tmdbItemType !== requestItemType) return;
       } else if ((latest.tmdbEndpoint || '') !== requestEndpoint) {
@@ -1414,6 +1823,8 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
     if (backdrops.length < 2) return;
 
+    const slideshowDurationMs = this.getEffectiveSlideshowDurationMs(element);
+
     const advanceSlide = () => {
         const el = this.elements().find(e => e.id === elementId);
         const state = this.slideshowState()[elementId];
@@ -1476,18 +1887,52 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
             }, 900);
         }, 1100);
 
-    }, 5000);
+    }, slideshowDurationMs);
     this.slideshowIntervals.set(elementId, interval);
   }
 
   // --- UI & INTERACTION ---
+  private getResizedBounds(element: CanvasElement, bounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    startX: number;
+    startY: number;
+    startWidth: number;
+    startHeight: number;
+    edges: { left?: boolean; right?: boolean; top?: boolean; bottom?: boolean };
+  }) {
+    const increment = this.getSnapIncrement(element);
+    let x = element.snapToGrid ? this.snapValue(bounds.x, increment) : bounds.x;
+    let y = element.snapToGrid ? this.snapValue(bounds.y, increment) : bounds.y;
+    let width = Math.max(20, element.snapToGrid ? this.snapValue(bounds.width, increment) : bounds.width);
+    let height = Math.max(20, element.snapToGrid ? this.snapValue(bounds.height, increment) : bounds.height);
+
+    if (element.type === 'tmdb-poster' && element.maintainAspectRatio !== false) {
+      const widthDelta = Math.abs(width - bounds.startWidth);
+      const heightDelta = Math.abs(height - bounds.startHeight);
+
+      if (widthDelta >= heightDelta) {
+        height = width / this.posterAspectRatio;
+      } else {
+        width = height * this.posterAspectRatio;
+      }
+
+      if (bounds.edges.left && !bounds.edges.right) x = bounds.startX + bounds.startWidth - width;
+      if (bounds.edges.top && !bounds.edges.bottom) y = bounds.startY + bounds.startHeight - height;
+
+      if (element.snapToGrid) {
+        x = this.snapValue(x, increment);
+        y = this.snapValue(y, increment);
+      }
+    }
+
+    return { x, y, width, height };
+  }
+
   private setupInteract() {
     if (typeof interact === 'undefined') return;
-
-    const snapModifiers = [
-        interact.modifiers.snap({ targets: [], range: Infinity, relativePoints: [{ x: 0.5, y: 0.5 }] }),
-        interact.modifiers.restrictRect({ restriction: 'parent', endOnly: false })
-    ];
 
     interact('.draggable-element').unset();
     interact('.draggable-element').draggable({
@@ -1495,17 +1940,20 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         move: (event: any) => {
           const scale = this.canvasConfig().scale;
           const target = event.target;
-          const currentDataX = (parseFloat(target.getAttribute('data-x')) || 0);
-          const currentDataY = (parseFloat(target.getAttribute('data-y')) || 0);
-          const x = currentDataX + (event.dx / scale);
-          const y = currentDataY + (event.dy / scale);
-
           const element = this.elements().find(el => el.id === target.id);
-          const rotation = element?.rotation || 0;
+          if (!element) return;
+
+          const rawX = (parseFloat(target.getAttribute('data-raw-x')) || 0) + (event.dx / scale);
+          const rawY = (parseFloat(target.getAttribute('data-raw-y')) || 0) + (event.dy / scale);
+          const x = element.snapToGrid ? this.snapValue(element.x + rawX, this.getSnapIncrement(element)) - element.x : rawX;
+          const y = element.snapToGrid ? this.snapValue(element.y + rawY, this.getSnapIncrement(element)) - element.y : rawY;
+          const rotation = element.rotation || 0;
 
           target.style.transform = `translate(${x}px, ${y}px) rotate(${rotation}deg)`;
           target.setAttribute('data-x', x);
           target.setAttribute('data-y', y);
+          target.setAttribute('data-raw-x', rawX);
+          target.setAttribute('data-raw-y', rawY);
         },
         end: (event: any) => {
           const target = event.target;
@@ -1522,11 +1970,13 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
             target.style.transform = `rotate(${element.rotation}deg)`;
             target.removeAttribute('data-x');
             target.removeAttribute('data-y');
+            target.removeAttribute('data-raw-x');
+            target.removeAttribute('data-raw-y');
             this.saveStateToHistory();
           }
         }
       },
-      modifiers: snapModifiers,
+      modifiers: [interact.modifiers.restrictRect({ restriction: 'parent', endOnly: false })],
       inertia: false
     }).resizable({
       edges: { left: true, right: true, bottom: true, top: true },
@@ -1534,22 +1984,69 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         move: (event: any) => {
           const id = event.target.id;
           const scale = this.canvasConfig().scale;
+          const target = event.target;
           this.elements.update(els =>
             els.map(el => {
               if (el.id === id) {
+                if (!target.hasAttribute('data-resize-start-width')) {
+                  target.setAttribute('data-resize-start-x', el.x);
+                  target.setAttribute('data-resize-start-y', el.y);
+                  target.setAttribute('data-resize-start-width', el.width);
+                  target.setAttribute('data-resize-start-height', el.height);
+                  target.setAttribute('data-raw-resize-x', el.x);
+                  target.setAttribute('data-raw-resize-y', el.y);
+                  target.setAttribute('data-raw-resize-width', el.width);
+                  target.setAttribute('data-raw-resize-height', el.height);
+                }
+
+                const startX = parseFloat(target.getAttribute('data-resize-start-x')) || el.x;
+                const startY = parseFloat(target.getAttribute('data-resize-start-y')) || el.y;
+                const startWidth = parseFloat(target.getAttribute('data-resize-start-width')) || el.width;
+                const startHeight = parseFloat(target.getAttribute('data-resize-start-height')) || el.height;
+                const rawX = (parseFloat(target.getAttribute('data-raw-resize-x')) || el.x) + (event.deltaRect.left / scale);
+                const rawY = (parseFloat(target.getAttribute('data-raw-resize-y')) || el.y) + (event.deltaRect.top / scale);
+                const rawWidth = (parseFloat(target.getAttribute('data-raw-resize-width')) || el.width) + (event.deltaRect.width / scale);
+                const rawHeight = (parseFloat(target.getAttribute('data-raw-resize-height')) || el.height) + (event.deltaRect.height / scale);
+
+                target.setAttribute('data-raw-resize-x', rawX);
+                target.setAttribute('data-raw-resize-y', rawY);
+                target.setAttribute('data-raw-resize-width', rawWidth);
+                target.setAttribute('data-raw-resize-height', rawHeight);
+
+                const bounds = this.getResizedBounds(el, {
+                  x: rawX,
+                  y: rawY,
+                  width: rawWidth,
+                  height: rawHeight,
+                  startX,
+                  startY,
+                  startWidth,
+                  startHeight,
+                  edges: event.edges || {}
+                });
+
                 return {
-                    ...el,
-                    width: Math.max(20, el.width + (event.deltaRect.width / scale)),
-                    height: Math.max(20, el.height + (event.deltaRect.height / scale)),
-                    x: el.x + (event.deltaRect.left / scale),
-                    y: el.y + (event.deltaRect.top / scale),
+                  ...el,
+                  ...bounds
                 };
               }
               return el;
             })
           );
         },
-        end: () => this.saveStateToHistory()
+        end: (event: any) => {
+          [
+            'data-resize-start-x',
+            'data-resize-start-y',
+            'data-resize-start-width',
+            'data-resize-start-height',
+            'data-raw-resize-x',
+            'data-raw-resize-y',
+            'data-raw-resize-width',
+            'data-raw-resize-height'
+          ].forEach(attr => event.target.removeAttribute(attr));
+          this.saveStateToHistory();
+        }
       },
       modifiers: [interact.modifiers.restrictSize({ min: { width: 20, height: 20 } })],
       inertia: false
@@ -1558,9 +2055,16 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   openContextMenu(event: MouseEvent, elementId: string) {
     event.preventDefault(); event.stopPropagation();
-    this.selectElement(elementId);
+    if (this.multiSelectMode()) {
+      if (!this.isElementInMultiSelection(elementId)) {
+        this.selectedElementIds.update(ids => [...ids, elementId]);
+      }
+      this.selectedElementId.set(elementId);
+    } else {
+      this.selectElement(elementId);
+    }
     const menuWidth = 200;
-    const menuHeight = 300;
+    const menuHeight = 390;
     const x = event.clientX + menuWidth > window.innerWidth ? window.innerWidth - menuWidth - 10 : event.clientX;
     const y = event.clientY + menuHeight > window.innerHeight ? window.innerHeight - menuHeight - 10 : event.clientY;
     this.contextMenu.set({ visible: true, x, y, elementId });
@@ -1708,8 +2212,9 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
           endpoint: el.tmdbEndpoint,
           collectionType: el.tmdbCollectionType || 'movie',
           discoverFilters: this.normalizeExportDiscoverFilters(el.discoverFilters),
-          limit: this.getEffectiveCollectionItemLimit(el, elements),
+          limit: this.isCollectionElement(el) ? this.getEffectiveCollectionItemLimit(el, elements) : 1,
           enrichLinked: !!el.linkGroup && linkedCollectionGroups.has(el.linkGroup),
+          enrichFirst: !this.isCollectionElement(el),
           ttl: 900
         };
       }
@@ -1912,6 +2417,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         if (results.length === 0) return;
         const fallbackType = data.__collectionType || el.dataset.itemType || 'movie';
         const globalSceneFade = el.dataset.globalSceneFade === 'true';
+        const slideshowDuration = Math.max(1000, Math.min(60000, Number(el.dataset.slideshowDuration) || 5000));
         let currentIdx = 0;
 
         function applySlide(index, useSceneFade) {
@@ -1938,7 +2444,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
             setInterval(() => {
                 currentIdx = (currentIdx + 1) % results.length;
                 applySlide(currentIdx, true);
-            }, 5000);
+            }, slideshowDuration);
         }
     }
 
@@ -2102,7 +2608,10 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
             if (sourceId) attrs.push(`data-source-id="${this.escapeHtml(sourceId)}"`);
             if (el.linkGroup) attrs.push(`data-link-group="${this.escapeHtml(el.linkGroup)}"`);
             if (this.isCollectionElement(el)) attrs.push(`data-collection-limit="${this.getEffectiveCollectionItemLimit(el, visibleElements)}"`);
-            if (el.type === 'tmdb-backdrop-slideshow') attrs.push(`data-global-scene-fade="${this.getEffectiveGlobalSceneFade(el, visibleElements) ? 'true' : 'false'}"`);
+            if (el.type === 'tmdb-backdrop-slideshow') {
+                attrs.push(`data-global-scene-fade="${this.getEffectiveGlobalSceneFade(el, visibleElements) ? 'true' : 'false'}"`);
+                attrs.push(`data-slideshow-duration="${this.getEffectiveSlideshowDurationMs(el, visibleElements)}"`);
+            }
             if (el.type === 'tmdb-dynamic-field') {
                 attrs.push(`data-data-path="${this.escapeHtml(el.dataPath || '')}"`);
                 attrs.push(`data-data-prefix="${this.escapeHtml(el.dataPrefix || '')}"`);
@@ -2260,7 +2769,7 @@ function tmdb_fetch_source($source, $config) {
         if (!$data) return null;
         $data['results'] = array_slice($combinedResults, 0, $limit);
         $data['__collectionType'] = $source['collectionType'] ?? 'movie';
-        if (!empty($source['enrichLinked']) && !empty($data['results']) && is_array($data['results'])) {
+        if ((!empty($source['enrichLinked']) || !empty($source['enrichFirst'])) && !empty($data['results']) && is_array($data['results'])) {
             $details = array();
             foreach (array_slice($data['results'], 0, $limit) as $item) {
                 if (empty($item['id'])) continue;

@@ -10,6 +10,20 @@
     <button (click)="duplicateElement(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors"><i class="fa-solid fa-copy w-4 text-center"></i> Duplicate</button>
     <button (click)="copyStyles(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors"><i class="fa-solid fa-palette w-4 text-center"></i> Copy Styles</button>
     <button (click)="pasteStyles(contextMenu().elementId!)" [disabled]="!copiedStyles()" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-paste w-4 text-center"></i> Paste Styles</button>
+    <button (click)="toggleMultiSelectFromContext(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors">
+      <i class="fa-solid fa-object-ungroup w-4 text-center"></i>
+      {{ multiSelectMode() ? (isElementInMultiSelection(contextMenu().elementId) ? 'Remove From Selection' : 'Add To Selection') : 'Select Multiple' }}
+    </button>
+    @if (canCreateSelectionBackground()) {
+      <button (click)="addBackgroundBehindSelection()" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors">
+        <i class="fa-solid fa-square w-4 text-center"></i> Add Background Behind Selection
+      </button>
+    }
+    @if (multiSelectMode()) {
+      <button (click)="clearMultiSelection()" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors">
+        <i class="fa-solid fa-xmark w-4 text-center"></i> Clear Multi Selection
+      </button>
+    }
 
     <div class="my-1 border-t border-[#254261]"></div>
 
@@ -53,6 +67,13 @@
                </div>
            </div>
         </div>
+    }
+
+    @if (isDynamicElement(contextMenu().elementId)) {
+        <button (click)="toggleSnapToGrid(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors">
+            <i class="fa-solid fa-border-all w-4 text-center"></i>
+            {{ isSnapEnabled(contextMenu().elementId) ? 'Turn Off Snap to Grid' : 'Turn On Snap to Grid' }}
+        </button>
     }
 
     <button (click)="bringToFront(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors"><i class="fa-solid fa-layer-group w-4 text-center"></i> Bring to Front</button>
@@ -310,10 +331,10 @@
             <div
               [id]="element.id"
               class="draggable-element group"
-              [class.ring-2]="selectedElementId() === element.id && !previewMode()"
-              [class.ring-[#01b4e4]]="selectedElementId() === element.id && !previewMode()"
-              [class.ring-offset-2]="selectedElementId() === element.id && !previewMode()"
-              [class.ring-offset-black]="selectedElementId() === element.id && !previewMode()"
+              [class.ring-2]="isElementSelected(element.id) && !previewMode()"
+              [class.ring-[#01b4e4]]="isElementSelected(element.id) && !previewMode()"
+              [class.ring-offset-2]="isElementSelected(element.id) && !previewMode()"
+              [class.ring-offset-black]="isElementSelected(element.id) && !previewMode()"
               [style.position]="'absolute'" [style.top.px]="element.y" [style.left.px]="element.x"
               [style.width.px]="element.width" [style.height.px]="element.height"
               [style.zIndex]="element.zIndex"
@@ -333,7 +354,7 @@
               (mousedown)="selectElementFromPointer($event, element.id)"
               (contextmenu)="openContextMenu($event, element.id)">
 
-                @if (selectedElementId() === element.id && !previewMode()) {
+                @if (isElementSelected(element.id) && !previewMode()) {
                     <div class="absolute -right-1 -bottom-1 w-3 h-3 bg-white rounded-full z-50 cursor-se-resize shadow-sm"></div>
                 }
 
@@ -404,7 +425,7 @@
   <!-- RIGHT SIDEBAR -->
   <aside class="w-80 bg-[#06121e] border-l border-[#183352] flex flex-col shrink-0 z-20 shadow-xl">
     <div class="tab-group pt-2 border-b border-[#183352]">
-      <button (click)="activeRightPanelTab.set('properties')" [disabled]="!selectedElement()" class="tab" [class.active]="activeRightPanelTab() === 'properties'">
+      <button (click)="activeRightPanelTab.set('properties')" [disabled]="!selectedElement() && selectedElementIds().length === 0" class="tab" [class.active]="activeRightPanelTab() === 'properties'">
         <i class="fa-solid fa-sliders"></i> Properties
       </button>
       <button (click)="activeRightPanelTab.set('layers')" class="tab" [class.active]="activeRightPanelTab() === 'layers'">
@@ -433,7 +454,7 @@
                         (drop)="onLayerDrop($event, element.id)"
                         (click)="selectElement(element.id)"
                         class="layer-item group transition-all duration-200"
-                        [class.selected]="selectedElementId() === element.id"
+                        [class.selected]="isElementSelected(element.id)"
                         [class.drag-over]="dragOverLayerId() === element.id">
 
                         <div class="flex items-center gap-2 overflow-hidden flex-1">
@@ -500,7 +521,25 @@
           </div>
         }
 
-        @if (activeRightPanelTab() === 'properties' && selectedElement(); as el) {
+        @if (activeRightPanelTab() === 'properties' && hasMultiSelection()) {
+            <div class="bg-[#06121e]">
+              <div class="panel-header">
+                <span class="panel-title">Selection</span>
+                <button (click)="clearMultiSelection()" class="text-[#64839e] hover:text-red-500 transition-colors"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+              <div class="p-4 border-b border-[#183352] space-y-3">
+                  <div class="p-3 bg-[#0a1724] rounded border border-[#254261]">
+                      <div class="text-xs text-[#8eaec4] font-semibold">{{ selectedElementIds().length }} elements selected</div>
+                  </div>
+                  <button (click)="addBackgroundBehindSelection()" class="btn btn-primary w-full">
+                      <i class="fa-solid fa-square"></i> Add Background Behind Selection
+                  </button>
+                  <button (click)="clearMultiSelection()" class="btn btn-secondary w-full">
+                      <i class="fa-solid fa-xmark"></i> Clear Selection
+                  </button>
+              </div>
+            </div>
+        } @else if (activeRightPanelTab() === 'properties' && selectedElement(); as el) {
             <div class="bg-[#06121e]">
               <div class="panel-header">
                 <span class="panel-title">{{ formatTypeName(el.type) }} Settings</span>
@@ -526,19 +565,45 @@
                         <p class="text-[10px] text-[#64839e] mt-1">Synced TMDB layers share a source and can follow the current slideshow item.</p>
                     </div>
 
+                    @if(getSlideshowMasterForElement(el); as slideshowMaster) {
+                      <div class="input-group">
+                          <label class="label flex justify-between items-center">
+                              Slideshow Duration
+                              <span class="text-[10px] font-normal text-[#8eaec4]">{{ getEffectiveSlideshowDurationSeconds(el) }}s</span>
+                          </label>
+                          <select
+                              [ngModel]="getEffectiveSlideshowDurationSeconds(el)"
+                              (ngModelChange)="updateSlideshowDuration(el.id, +$event)"
+                              class="select text-xs"
+                              [disabled]="slideshowMaster.id !== el.id"
+                              title="Seconds each slideshow item stays visible">
+                              @for(duration of slideshowDurationOptions; track duration) {
+                                  <option [value]="duration">{{ duration }} seconds</option>
+                              }
+                          </select>
+                          @if(slideshowMaster.id !== el.id) {
+                              <p class="text-[10px] text-[#64839e] mt-1">Using the synced slideshow layer's duration.</p>
+                          }
+                      </div>
+                    }
+
                     @if(el.type.includes('scroll') || el.type.includes('slideshow')) {
                       <div class="input-group">
                         <label class="label">Collection Type</label>
                         <div class="flex bg-[#0a1724] rounded p-1 border border-[#254261]">
-                             <button (click)="updateElementProperty('tmdbCollectionType', 'movie'); fetchTmdbDataForElement(el.id)" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-[#01b4e4]]="el.tmdbCollectionType === 'movie'" [class.text-[#0d253f]]="el.tmdbCollectionType === 'movie'" [class.text-[#8eaec4]]="el.tmdbCollectionType !== 'movie'">Movies</button>
-                             <button (click)="updateElementProperty('tmdbCollectionType', 'tv'); fetchTmdbDataForElement(el.id)" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-[#01b4e4]]="el.tmdbCollectionType === 'tv'" [class.text-[#0d253f]]="el.tmdbCollectionType === 'tv'" [class.text-[#8eaec4]]="el.tmdbCollectionType !== 'tv'">TV</button>
+                             <button (click)="updateTmdbSourceType(el.id, 'movie')" [disabled]="isSyncedWithLayer(el)" class="flex-1 py-1 text-xs rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed" [class.bg-[#01b4e4]]="el.tmdbCollectionType === 'movie'" [class.text-[#0d253f]]="el.tmdbCollectionType === 'movie'" [class.text-[#8eaec4]]="el.tmdbCollectionType !== 'movie'">Movies</button>
+                             <button (click)="updateTmdbSourceType(el.id, 'tv')" [disabled]="isSyncedWithLayer(el)" class="flex-1 py-1 text-xs rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed" [class.bg-[#01b4e4]]="el.tmdbCollectionType === 'tv'" [class.text-[#0d253f]]="el.tmdbCollectionType === 'tv'" [class.text-[#8eaec4]]="el.tmdbCollectionType !== 'tv'">TV</button>
                         </div>
                       </div>
                       <div class="input-group">
                           <label class="label">Endpoint</label>
-                          <select [ngModel]="el.tmdbEndpoint" (ngModelChange)="updateElementProperty('tmdbEndpoint', $event); fetchTmdbDataForElement(el.id)" class="select" [disabled]="!el.tmdbCollectionType">
+                          <select [ngModel]="el.tmdbEndpoint || ''" (ngModelChange)="updateTmdbEndpoint(el.id, $event)" class="select" [disabled]="!el.tmdbCollectionType || isSyncedWithLayer(el)">
+                            <option value="">Choose endpoint</option>
                             @for(endpoint of availableCollectionEndpoints(); track endpoint.key) { <option [value]="endpoint.key">{{ endpoint.name }}</option> }
                           </select>
+                          @if(isSyncedWithLayer(el)) {
+                              <p class="text-[10px] text-[#64839e] mt-1">Using the synced layer's endpoint.</p>
+                          }
                       </div>
 
                       <div class="input-group">
@@ -578,20 +643,20 @@
                            <div class="label mb-2 text-[#01b4e4]">Discover Filters</div>
                            <div class="input-group">
                                <label class="label">Sort By</label>
-                               <select [ngModel]="el.discoverFilters.sortBy" (ngModelChange)="updateDiscoverFilter('sortBy', $event); fetchTmdbDataForElement(el.id)" class="select text-xs">
+                               <select [ngModel]="el.discoverFilters.sortBy" (ngModelChange)="updateDiscoverFilter('sortBy', $event); fetchTmdbDataForElement(el.id)" class="select text-xs" [disabled]="isSyncedWithLayer(el)">
                                    @for(opt of availableSortOptions(); track opt.key){ <option [value]="opt.key">{{opt.name}}</option> }
                                </select>
                            </div>
                            <div class="input-group">
                                <label class="label">Year</label>
-                               <input type="number" placeholder="e.g. 2024" [ngModel]="el.discoverFilters.year" (ngModelChange)="updateDiscoverFilter('year', +$event); fetchTmdbDataForElement(el.id)" class="input text-xs">
+                               <input type="number" placeholder="e.g. 2024" [ngModel]="el.discoverFilters.year" (ngModelChange)="updateDiscoverFilter('year', +$event); fetchTmdbDataForElement(el.id)" class="input text-xs" [disabled]="isSyncedWithLayer(el)">
                            </div>
                            <div class="input-group mb-0">
                                <label class="label">Genres</label>
-                              <div class="h-24 overflow-y-auto bg-[#06121e] rounded border border-[#183352] p-2 space-y-1 custom-scrollbar">
+                              <div class="h-24 overflow-y-auto bg-[#06121e] rounded border border-[#183352] p-2 space-y-1 custom-scrollbar" [class.opacity-50]="isSyncedWithLayer(el)">
                                 @for(genre of availableGenres(); track genre.id) {
                                   <label class="flex items-center space-x-2 text-xs cursor-pointer hover:text-white text-[#8eaec4] transition-colors">
-                                      <input type="checkbox" [checked]="el.discoverFilters.genres.includes(genre.id)" (change)="toggleDiscoverGenre(el.id, genre.id, $any($event.target).checked)" class="rounded bg-[#0a1724] border-[#254261] text-[#01b4e4] focus:ring-[#01b4e4]">
+                                      <input type="checkbox" [checked]="el.discoverFilters.genres.includes(genre.id)" (change)="toggleDiscoverGenre(el.id, genre.id, $any($event.target).checked)" [disabled]="isSyncedWithLayer(el)" class="rounded bg-[#0a1724] border-[#254261] text-[#01b4e4] focus:ring-[#01b4e4]">
                                       <span>{{genre.name}}</span>
                                   </label>
                                 }
@@ -613,42 +678,82 @@
                         <div class="input-group">
                           <label class="label">Media Type</label>
                           <div class="flex bg-[#0a1724] rounded p-1 border border-[#254261]">
-                             <button (click)="updateElementProperty('tmdbItemType', 'movie')" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-[#01b4e4]]="el.tmdbItemType === 'movie'" [class.text-[#0d253f]]="el.tmdbItemType === 'movie'" [class.text-[#8eaec4]]="el.tmdbItemType !== 'movie'">Movie</button>
-                             <button (click)="updateElementProperty('tmdbItemType', 'tv')" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-[#01b4e4]]="el.tmdbItemType === 'tv'" [class.text-[#0d253f]]="el.tmdbItemType === 'tv'" [class.text-[#8eaec4]]="el.tmdbItemType !== 'tv'">TV Show</button>
+                             <button (click)="updateTmdbSourceType(el.id, 'movie')" [disabled]="isSyncedWithLayer(el)" class="flex-1 py-1 text-xs rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed" [class.bg-[#01b4e4]]="el.tmdbItemType === 'movie'" [class.text-[#0d253f]]="el.tmdbItemType === 'movie'" [class.text-[#8eaec4]]="el.tmdbItemType !== 'movie'">Movie</button>
+                             <button (click)="updateTmdbSourceType(el.id, 'tv')" [disabled]="isSyncedWithLayer(el)" class="flex-1 py-1 text-xs rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed" [class.bg-[#01b4e4]]="el.tmdbItemType === 'tv'" [class.text-[#0d253f]]="el.tmdbItemType === 'tv'" [class.text-[#8eaec4]]="el.tmdbItemType !== 'tv'">TV Show</button>
                           </div>
-                        </div>
-
-                        <div class="input-group relative">
-                          <label class="label">Quick Search</label>
-                          <div class="relative">
-                              <input type="text" #searchInput (keyup)="searchTmdb(searchInput.value)" placeholder="Type movie name..." class="input pl-10">
-                              <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[#64839e] text-xs"></i>
-                          </div>
-
-                          @if (isSearching()) { <div class="absolute right-2 top-8 text-xs text-[#64839e]"><i class="fa-solid fa-spinner fa-spin"></i></div> }
-
-                          @if(tmdbSearchResults().length > 0) {
-                            <div class="absolute z-50 w-full bg-[#0a1724] border border-[#254261] rounded-lg mt-1 max-h-64 overflow-y-auto shadow-2xl custom-scrollbar">
-                              @for(item of tmdbSearchResults(); track item.id) {
-                                <button (click)="selectTmdbItem(item); searchInput.value = ''" class="w-full text-left p-2 hover:bg-[#01b4e4]/20 hover:border-l-2 hover:border-[#01b4e4] flex items-start gap-3 border-b border-[#183352] last:border-0 transition-all">
-                                  <img [src]="'https://image.tmdb.org/t/p/w92' + (item.poster_path || item.profile_path)" class="w-8 h-12 object-cover rounded bg-[#183352] shrink-0">
-                                  <div class="min-w-0">
-                                      <p class="font-semibold text-slate-200 truncate text-xs">{{ item.title || item.name }}</p>
-                                      <p class="text-[10px] text-[#64839e]">{{ item.release_date || item.first_air_date | slice:0:4 }}</p>
-                                  </div>
-                                </button>
-                              }
-                            </div>
-                          }
                         </div>
 
                         <div class="input-group">
-                            <label class="label">Manual ID</label>
-                            <div class="flex gap-2">
-                                <input type="text" [ngModel]="el.tmdbId" (ngModelChange)="updateElementProperty('tmdbId', $event)" class="input font-mono text-xs" placeholder="ID">
-                                <button (click)="fetchTmdbDataForElement(el.id)" class="btn btn-secondary px-3" title="Refresh Data"><i class="fa-solid fa-sync"></i></button>
-                            </div>
+                            <label class="label">Endpoint</label>
+                            <select [ngModel]="el.tmdbEndpoint || ''" (ngModelChange)="updateTmdbEndpoint(el.id, $event)" class="select" [disabled]="isSyncedWithLayer(el)">
+                                <option value="">Manual Search / ID</option>
+                                @for(endpoint of availableCollectionEndpoints(); track endpoint.key) { <option [value]="endpoint.key">{{ endpoint.name }}</option> }
+                            </select>
+                            @if(isSyncedWithLayer(el)) {
+                                <p class="text-[10px] text-[#64839e] mt-1">Using the synced layer's endpoint.</p>
+                            }
                         </div>
+
+                        @if(el.tmdbEndpoint?.startsWith('discover')) {
+                          <div class="p-3 bg-[#0a1724] rounded border border-[#254261] mt-2">
+                             <div class="label mb-2 text-[#01b4e4]">Discover Filters</div>
+                             <div class="input-group">
+                                 <label class="label">Sort By</label>
+                                 <select [ngModel]="el.discoverFilters.sortBy" (ngModelChange)="updateDiscoverFilter('sortBy', $event); fetchTmdbDataForElement(el.id)" class="select text-xs" [disabled]="isSyncedWithLayer(el)">
+                                     @for(opt of availableSortOptions(); track opt.key){ <option [value]="opt.key">{{opt.name}}</option> }
+                                 </select>
+                             </div>
+                             <div class="input-group">
+                                 <label class="label">Year</label>
+                                 <input type="number" placeholder="e.g. 2024" [ngModel]="el.discoverFilters.year" (ngModelChange)="updateDiscoverFilter('year', +$event); fetchTmdbDataForElement(el.id)" class="input text-xs" [disabled]="isSyncedWithLayer(el)">
+                             </div>
+                             <div class="input-group mb-0">
+                                 <label class="label">Genres</label>
+                                <div class="h-24 overflow-y-auto bg-[#06121e] rounded border border-[#183352] p-2 space-y-1 custom-scrollbar" [class.opacity-50]="isSyncedWithLayer(el)">
+                                  @for(genre of availableGenres(); track genre.id) {
+                                    <label class="flex items-center space-x-2 text-xs cursor-pointer hover:text-white text-[#8eaec4] transition-colors">
+                                        <input type="checkbox" [checked]="el.discoverFilters.genres.includes(genre.id)" (change)="toggleDiscoverGenre(el.id, genre.id, $any($event.target).checked)" [disabled]="isSyncedWithLayer(el)" class="rounded bg-[#0a1724] border-[#254261] text-[#01b4e4] focus:ring-[#01b4e4]">
+                                        <span>{{genre.name}}</span>
+                                    </label>
+                                  }
+                                </div>
+                             </div>
+                          </div>
+                        }
+
+                        @if(!el.tmdbEndpoint) {
+                            <div class="input-group relative">
+                              <label class="label">Quick Search</label>
+                              <div class="relative">
+                                  <input type="text" #searchInput (keyup)="searchTmdb(searchInput.value)" [disabled]="isSyncedWithLayer(el)" placeholder="Type movie name..." class="input pl-10 disabled:opacity-50 disabled:cursor-not-allowed">
+                                  <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[#64839e] text-xs"></i>
+                              </div>
+
+                              @if (isSearching()) { <div class="absolute right-2 top-8 text-xs text-[#64839e]"><i class="fa-solid fa-spinner fa-spin"></i></div> }
+
+                              @if(tmdbSearchResults().length > 0) {
+                                <div class="absolute z-50 w-full bg-[#0a1724] border border-[#254261] rounded-lg mt-1 max-h-64 overflow-y-auto shadow-2xl custom-scrollbar">
+                                  @for(item of tmdbSearchResults(); track item.id) {
+                                    <button (click)="selectTmdbItem(item); searchInput.value = ''" class="w-full text-left p-2 hover:bg-[#01b4e4]/20 hover:border-l-2 hover:border-[#01b4e4] flex items-start gap-3 border-b border-[#183352] last:border-0 transition-all">
+                                      <img [src]="'https://image.tmdb.org/t/p/w92' + (item.poster_path || item.profile_path)" class="w-8 h-12 object-cover rounded bg-[#183352] shrink-0">
+                                      <div class="min-w-0">
+                                          <p class="font-semibold text-slate-200 truncate text-xs">{{ item.title || item.name }}</p>
+                                          <p class="text-[10px] text-[#64839e]">{{ item.release_date || item.first_air_date | slice:0:4 }}</p>
+                                      </div>
+                                    </button>
+                                  }
+                                </div>
+                              }
+                            </div>
+
+                            <div class="input-group">
+                                <label class="label">Manual ID</label>
+                                <div class="flex gap-2">
+                                    <input type="text" [ngModel]="el.tmdbId" (ngModelChange)="updateElementProperty('tmdbId', $event)" [disabled]="isSyncedWithLayer(el)" class="input font-mono text-xs disabled:opacity-50 disabled:cursor-not-allowed" placeholder="ID">
+                                    <button (click)="fetchTmdbDataForElement(el.id)" [disabled]="isSyncedWithLayer(el)" class="btn btn-secondary px-3" title="Refresh Data"><i class="fa-solid fa-sync"></i></button>
+                                </div>
+                            </div>
+                        }
                     }
                   </div>
                 </details>
@@ -699,6 +804,32 @@
               <details class="accordion" open>
                 <summary>Layout & Position</summary>
                 <div class="accordion-content">
+                  @if(el.type.startsWith('tmdb-')) {
+                    <div class="mb-4 p-3 bg-[#0a1724] rounded border border-[#254261] space-y-3">
+                        <label class="flex items-center justify-between gap-3 text-xs text-[#8eaec4] cursor-pointer">
+                            <span class="label mb-0">Snap to Grid</span>
+                            <input type="checkbox" [ngModel]="!!el.snapToGrid" (ngModelChange)="toggleSnapToGrid(el.id, $event)" class="rounded bg-[#0a1724] border-[#254261] text-[#01b4e4] focus:ring-[#01b4e4]">
+                        </label>
+                        <div>
+                            <label class="label">Snap Increment</label>
+                            <select [ngModel]="el.snapIncrement || 20" (ngModelChange)="updateElementProperty('snapIncrement', +$event)" class="select text-xs">
+                                @for(increment of snapIncrementOptions; track increment) {
+                                    <option [value]="increment">{{ increment }} px</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                  }
+
+                  @if(el.type === 'tmdb-poster') {
+                    <div class="mb-4 p-3 bg-[#0a1724] rounded border border-[#254261]">
+                        <label class="flex items-center justify-between gap-3 text-xs text-[#8eaec4] cursor-pointer">
+                            <span class="label mb-0">Maintain Aspect Ratio</span>
+                            <input type="checkbox" [ngModel]="el.maintainAspectRatio !== false" (ngModelChange)="updatePosterAspectRatio(el.id, $event)" class="rounded bg-[#0a1724] border-[#254261] text-[#01b4e4] focus:ring-[#01b4e4]">
+                        </label>
+                    </div>
+                  }
+
                   @if(['tmdb-backdrop', 'tmdb-backdrop-slideshow'].includes(el.type)) {
                     <div class="mb-4 p-3 bg-[#0a1724] rounded border border-[#254261]">
                         <label class="label">Backdrop Fit</label>
