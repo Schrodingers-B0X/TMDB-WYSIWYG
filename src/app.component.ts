@@ -32,6 +32,7 @@ type FontSizeUnit = 'px' | 'pt' | 'em' | 'rem';
 type LayoutGroupRole = 'background' | 'member';
 type ContentAlignX = 'left' | 'center' | 'right';
 type ContentAlignY = 'top' | 'center' | 'bottom';
+type StrokePosition = 'inside' | 'outside';
 type RelativeSide = 'right' | 'left' | 'top' | 'bottom' | 'center';
 type TransitionEffect = 'none' | 'fade' | 'slide-left' | 'slide-right' | 'slide-up' | 'slide-down' | 'zoom' | 'blur' | 'flip' | 'bounce';
 type SlideshowState = {idx1: number, idx2: number, fade: boolean, resetting?: boolean, sceneFade: boolean, backdrops: string[], items: any[]};
@@ -66,9 +67,11 @@ interface CanvasElement {
     textStrokeColor?: string;
     contentAlignX?: ContentAlignX;
     contentAlignY?: ContentAlignY;
+    contentStrokeEnabled?: boolean;
     contentStrokeWidth?: number;
     contentStrokeUnit?: FontSizeUnit;
     contentStrokeColor?: string;
+    contentStrokePosition?: StrokePosition;
     contentShadow?: Shadow;
     borderRadius: number; borderWidth: number; borderColor: string;
     opacity: number;
@@ -104,6 +107,7 @@ interface CanvasElement {
   transitionDurationMs?: number;
   transitionDelayMs?: number;
   castBubbleSize?: number;
+  castCount?: number;
 
   // For Dynamic Data Fields
   dataPath?: string;
@@ -141,6 +145,8 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly maxHistoryStates = 50;
   private readonly defaultCollectionItemLimit = 20;
   private readonly maxCollectionItemLimit = 40;
+  private readonly defaultCastCount = 8;
+  private readonly maxCastCount = 30;
   private readonly defaultSlideshowDurationMs = 5000;
   private readonly minSlideshowDurationMs = 1000;
   private readonly maxSlideshowDurationMs = 60000;
@@ -189,6 +195,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly transitionDurationOptions = [150, 250, 350, 500, 750, 1000, 1500];
   readonly transitionDelayOptions = [0, 100, 250, 500, 1000, 2000];
   readonly castBubbleSizeOptions = [32, 40, 48, 56, 64, 80, 96, 120];
+  readonly castCountOptions = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 30];
 
   // --- CONSTANTS & STATIC DATA ---
   readonly countries = COUNTRIES;
@@ -411,6 +418,10 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.contentAlignYOptions.some(option => option.value === value) ? value : 'center';
   }
 
+  private normalizeStrokePosition(value: any): StrokePosition {
+    return value === 'inside' ? 'inside' : 'outside';
+  }
+
   private getDefaultContentAlignXForType(type: ElementType | string, textAlign: any = 'left'): ContentAlignX {
     const textFlowTypes = new Set([
       'text',
@@ -470,6 +481,12 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     return Math.max(20, Math.min(200, Math.round(parsed)));
   }
 
+  private normalizeCastCount(value: any): number {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return this.defaultCastCount;
+    return Math.max(1, Math.min(this.maxCastCount, Math.round(parsed)));
+  }
+
   private formatShadow(shadow?: Shadow): string | null {
     if (!shadow) return null;
     const x = this.normalizeCssLength(shadow.x, 0, -500, 500);
@@ -482,7 +499,15 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     const width = element.styles.contentStrokeWidth ?? element.styles.textStrokeWidth ?? 0;
     const unit = element.styles.contentStrokeUnit ?? element.styles.textStrokeUnit ?? 'px';
     const color = element.styles.contentStrokeColor ?? element.styles.textStrokeColor ?? '#000000';
-    return { width: this.normalizeCssLength(width, 0, 0, 100), unit: this.normalizeFontSizeUnit(unit), color };
+    const normalizedWidth = this.normalizeCssLength(width, 0, 0, 100);
+    const enabled = element.styles.contentStrokeEnabled ?? (normalizedWidth > 0);
+    return {
+      enabled,
+      width: enabled ? normalizedWidth : 0,
+      unit: this.normalizeFontSizeUnit(unit),
+      color,
+      position: this.normalizeStrokePosition(element.styles.contentStrokePosition)
+    };
   }
 
   formatElementFontSize(element: CanvasElement): string {
@@ -498,16 +523,39 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     return `${value}${unit}`;
   }
 
-  formatContentTextStroke(element: CanvasElement): string | null {
+  getContentTextStrokeStyles(element: CanvasElement): Record<string, string> | null {
     const stroke = this.getContentStrokeSource(element);
     if (stroke.width <= 0) return null;
-    return `${stroke.width}${stroke.unit} ${stroke.color}`;
+    const value = `${stroke.width}${stroke.unit} ${stroke.color}`;
+    return {
+      '-webkit-text-stroke': value,
+      'text-stroke': value,
+      'paint-order': stroke.position === 'outside' ? 'stroke fill' : 'fill stroke'
+    };
   }
 
   formatContentMediaBorder(element: CanvasElement): string | null {
     const stroke = this.getContentStrokeSource(element);
-    if (stroke.width <= 0) return null;
+    if (stroke.width <= 0 || stroke.position === 'outside') return null;
     return `${stroke.width}${stroke.unit} solid ${stroke.color}`;
+  }
+
+  private formatContentOutsideStrokeBoxShadow(element: CanvasElement): string | null {
+    const stroke = this.getContentStrokeSource(element);
+    if (stroke.width <= 0 || stroke.position !== 'outside') return null;
+    return `0 0 0 ${stroke.width}${stroke.unit} ${stroke.color}`;
+  }
+
+  formatContentMediaBoxShadow(element: CanvasElement): string | null {
+    return this.formatContentOutsideStrokeBoxShadow(element);
+  }
+
+  isContentStrokeEnabled(element: CanvasElement): boolean {
+    return this.getContentStrokeSource(element).enabled;
+  }
+
+  getContentStrokePosition(element: CanvasElement): StrokePosition {
+    return this.getContentStrokeSource(element).position;
   }
 
   formatContentTextShadow(element: CanvasElement): string | null {
@@ -524,7 +572,10 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   formatContentBoxShadow(element: CanvasElement): string | null {
-    return this.formatShadow(element.styles.contentShadow);
+    return [
+      this.formatContentOutsideStrokeBoxShadow(element),
+      this.formatShadow(element.styles.contentShadow)
+    ].filter(Boolean).join(', ') || null;
   }
 
   getContentTextAlign(element: CanvasElement): ContentAlignX {
@@ -567,11 +618,17 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   getVisibleCast(element: CanvasElement): any[] {
     const cast = element.tmdbData?.credits?.cast;
-    return Array.isArray(cast) ? cast.filter((actor: any) => !!actor.profile_path).slice(0, 8) : [];
+    return Array.isArray(cast)
+      ? cast.filter((actor: any) => !!actor.profile_path).slice(0, this.getCastCount(element))
+      : [];
   }
 
   getCastBubbleSize(element: CanvasElement): number {
     return this.normalizeCastBubbleSize(element.castBubbleSize);
+  }
+
+  getCastCount(element: CanvasElement): number {
+    return this.normalizeCastCount(element.castCount);
   }
 
   getCastItemWidth(element: CanvasElement): number {
@@ -1291,6 +1348,10 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private normalizeElementForProject(element: CanvasElement): CanvasElement {
     const { tmdbData, ...rest } = element;
+    const normalizedContentStrokeWidth = this.normalizeCssLength(element.styles?.contentStrokeWidth ?? element.styles?.textStrokeWidth, 0, 0, 100);
+    const contentStrokeEnabled = typeof element.styles?.contentStrokeEnabled === 'boolean'
+      ? element.styles.contentStrokeEnabled
+      : normalizedContentStrokeWidth > 0;
     const normalized: CanvasElement = {
       ...rest,
       styles: {
@@ -1305,9 +1366,11 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         textStrokeColor: element.styles?.textStrokeColor || '#000000',
         contentAlignX: this.normalizeContentAlignX(element.styles?.contentAlignX ?? this.getDefaultContentAlignXForType(element.type, element.styles?.textAlign)),
         contentAlignY: this.normalizeContentAlignY(element.styles?.contentAlignY ?? this.getDefaultContentAlignYForType(element.type)),
-        contentStrokeWidth: this.normalizeCssLength(element.styles?.contentStrokeWidth ?? element.styles?.textStrokeWidth, 0, 0, 100),
+        contentStrokeEnabled,
+        contentStrokeWidth: normalizedContentStrokeWidth,
         contentStrokeUnit: this.normalizeFontSizeUnit(element.styles?.contentStrokeUnit ?? element.styles?.textStrokeUnit),
         contentStrokeColor: element.styles?.contentStrokeColor || element.styles?.textStrokeColor || '#000000',
+        contentStrokePosition: this.normalizeStrokePosition(element.styles?.contentStrokePosition),
         contentShadow: element.styles?.contentShadow || element.styles?.textShadow
       },
       discoverFilters: {
@@ -1326,7 +1389,8 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       transitionDurationMs: this.normalizeTransitionDurationMs(element.transitionDurationMs, 500),
       transitionDelayMs: this.normalizeTransitionDurationMs(element.transitionDelayMs, 0),
       groupTransitionEnabled: !!element.groupTransitionEnabled,
-      castBubbleSize: element.type === 'tmdb-cast' ? this.normalizeCastBubbleSize(element.castBubbleSize) : element.castBubbleSize
+      castBubbleSize: element.type === 'tmdb-cast' ? this.normalizeCastBubbleSize(element.castBubbleSize) : element.castBubbleSize,
+      castCount: element.type === 'tmdb-cast' ? this.normalizeCastCount(element.castCount) : element.castCount
     };
     if (this.isCollectionElementType(normalized.type)) {
       normalized.collectionItemLimit = this.normalizeCollectionItemLimit(element.collectionItemLimit);
@@ -1495,9 +1559,11 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
           textStrokeColor: '#000000',
           contentAlignX: defaultContentAlignX,
           contentAlignY: defaultContentAlignY,
+          contentStrokeEnabled: false,
           contentStrokeWidth: 0,
           contentStrokeUnit: 'px',
           contentStrokeColor: '#000000',
+          contentStrokePosition: 'outside',
           borderRadius: 8,
           borderWidth: 0,
           borderColor: '#f1f5f9',
@@ -1519,6 +1585,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       transitionDurationMs: 500,
       transitionDelayMs: 0,
       castBubbleSize: type === 'tmdb-cast' ? 48 : undefined,
+      castCount: type === 'tmdb-cast' ? this.defaultCastCount : undefined,
       linkGroup: '',
       dataPath: '',
       dataPrefix: '',
@@ -1706,9 +1773,11 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         textStrokeColor: '#000000',
         contentAlignX: 'center',
         contentAlignY: 'center',
+        contentStrokeEnabled: false,
         contentStrokeWidth: 0,
         contentStrokeUnit: 'px',
         contentStrokeColor: '#000000',
+        contentStrokePosition: 'outside',
         borderRadius: 18,
         borderWidth: 0,
         borderColor: '#f1f5f9',
@@ -1826,6 +1895,8 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         el.styles.textAlign = nextValue as CanvasElement['styles']['textAlign'];
       } else if (prop === 'contentAlignY') {
         nextValue = this.normalizeContentAlignY(value);
+      } else if (prop === 'contentStrokePosition') {
+        nextValue = this.normalizeStrokePosition(value);
       } else if (prop === 'textAlign') {
         nextValue = this.normalizeContentAlignX(value);
         el.styles.contentAlignX = nextValue;
@@ -2209,9 +2280,36 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     this.saveStateToHistory();
   }
 
+  toggleContentStroke(elementId: string, enabled: boolean) {
+    this.elements.update(els => els.map(el => {
+      if (el.id !== elementId) return el;
+      const width = this.normalizeCssLength(el.styles.contentStrokeWidth ?? el.styles.textStrokeWidth, 0, 0, 100);
+      return {
+        ...el,
+        styles: {
+          ...el.styles,
+          contentStrokeEnabled: enabled,
+          contentStrokeWidth: enabled ? (width > 0 ? width : 1) : width,
+          contentStrokeUnit: this.normalizeFontSizeUnit(el.styles.contentStrokeUnit ?? el.styles.textStrokeUnit),
+          contentStrokeColor: el.styles.contentStrokeColor || el.styles.textStrokeColor || '#000000',
+          contentStrokePosition: this.normalizeStrokePosition(el.styles.contentStrokePosition)
+        }
+      };
+    }));
+    this.saveStateToHistory();
+  }
+
   updateCastBubbleSize(elementId: string, value: number) {
     this.elements.update(els => els.map(el => el.id === elementId && el.type === 'tmdb-cast'
       ? { ...el, castBubbleSize: this.normalizeCastBubbleSize(value) }
+      : el
+    ));
+    this.saveStateToHistory();
+  }
+
+  updateCastCount(elementId: string, value: number) {
+    this.elements.update(els => els.map(el => el.id === elementId && el.type === 'tmdb-cast'
+      ? { ...el, castCount: this.normalizeCastCount(value) }
       : el
     ));
     this.saveStateToHistory();
@@ -3373,7 +3471,10 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
     function setText(el, value) {
         clearElement(el);
-        el.textContent = value === undefined || value === null ? '' : String(value);
+        const span = document.createElement('span');
+        span.className = 'text-content';
+        span.textContent = value === undefined || value === null ? '' : String(value);
+        el.appendChild(span);
     }
 
     function appendImage(el, src, alt, fit) {
@@ -3488,8 +3589,9 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         el.style.overflowX = 'auto';
         el.style.textAlign = 'center';
         const bubbleSize = Math.max(20, Math.min(200, Number(el.dataset.castBubbleSize) || 48));
+        const castCount = Math.max(1, Math.min(30, Number(el.dataset.castCount) || 8));
         const cast = item && item.credits && Array.isArray(item.credits.cast) ? item.credits.cast : [];
-        cast.filter(person => person && person.profile_path).slice(0, 8).forEach(person => {
+        cast.filter(person => person && person.profile_path).slice(0, castCount).forEach(person => {
             if (!person.profile_path) return;
             const member = document.createElement('div');
             member.className = 'cast-member';
@@ -3770,9 +3872,12 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
             const justifyContent = contentAlignX === 'left' ? 'flex-start' : (contentAlignX === 'right' ? 'flex-end' : 'center');
             const alignItems = contentAlignY === 'top' ? 'flex-start' : (contentAlignY === 'bottom' ? 'flex-end' : 'center');
             const objectPosition = `${contentAlignX === 'left' ? 'left' : (contentAlignX === 'right' ? 'right' : 'center')} ${contentAlignY === 'top' ? 'top' : (contentAlignY === 'bottom' ? 'bottom' : 'center')}`;
-            const contentStrokeWidth = this.clampNumber(s.contentStrokeWidth ?? s.textStrokeWidth, 0, 0, 100);
+            const rawContentStrokeWidth = this.clampNumber(s.contentStrokeWidth ?? s.textStrokeWidth, 0, 0, 100);
+            const contentStrokeEnabled = s.contentStrokeEnabled ?? (rawContentStrokeWidth > 0);
+            const contentStrokeWidth = contentStrokeEnabled ? rawContentStrokeWidth : 0;
             const contentStrokeUnit = this.safeFontSizeUnit(s.contentStrokeUnit ?? s.textStrokeUnit);
             const contentStrokeColor = this.safeCssColor(s.contentStrokeColor || s.textStrokeColor, '#000000');
+            const contentStrokePosition = this.normalizeStrokePosition(s.contentStrokePosition);
             const contentShadow = s.contentShadow || s.textShadow;
             const contentShadowCss = contentShadow
                 ? `${this.clampNumber(contentShadow.x, 0, -500, 500)}px ${this.clampNumber(contentShadow.y, 0, -500, 500)}px ${this.clampNumber(contentShadow.blur, 0, 0, 500)}px ${this.safeCssColor(contentShadow.color, 'rgba(0,0,0,0.35)')}`
@@ -3809,11 +3914,6 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
             const rotation = this.clampNumber(el.rotation, 0, -3600, 3600);
             if (rotation) props.push(`transform: rotate(${rotation}deg)`);
-            if (contentStrokeWidth > 0) {
-                const stroke = `${contentStrokeWidth}${contentStrokeUnit} ${contentStrokeColor}`;
-                props.push(`-webkit-text-stroke: ${stroke}`);
-                props.push(`text-stroke: ${stroke}`);
-            }
             if (s.backgroundGradient) {
                 props.push(`background-image: linear-gradient(${this.clampNumber(s.backgroundGradient.angle, 0, 0, 360)}deg, ${this.safeCssColor(s.backgroundGradient.from, '#000000')}, ${this.safeCssColor(s.backgroundGradient.to, '#000000')})`);
             }
@@ -3837,23 +3937,37 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
             }
 
             const safeId = this.safeElementId(el.id);
+            const textStrokeProps = contentStrokeWidth > 0
+              ? [
+                  `-webkit-text-stroke: ${contentStrokeWidth}${contentStrokeUnit} ${contentStrokeColor}`,
+                  `text-stroke: ${contentStrokeWidth}${contentStrokeUnit} ${contentStrokeColor}`,
+                  `paint-order: ${contentStrokePosition === 'outside' ? 'stroke fill' : 'fill stroke'}`
+                ]
+              : [];
+            const outsideStrokeBoxShadow = contentStrokeWidth > 0 && contentStrokePosition === 'outside'
+              ? `0 0 0 ${contentStrokeWidth}${contentStrokeUnit} ${contentStrokeColor}`
+              : '';
             const mediaProps = [
                 `box-sizing: border-box`,
                 `object-position: ${objectPosition}`
             ];
-            if (contentStrokeWidth > 0) mediaProps.push(`border: ${contentStrokeWidth}${contentStrokeUnit} solid ${contentStrokeColor}`);
+            if (contentStrokeWidth > 0 && contentStrokePosition === 'inside') mediaProps.push(`border: ${contentStrokeWidth}${contentStrokeUnit} solid ${contentStrokeColor}`);
+            if (outsideStrokeBoxShadow) mediaProps.push(`box-shadow: ${outsideStrokeBoxShadow}`);
             if (contentDropShadowCss) mediaProps.push(`filter: ${contentDropShadowCss}`);
 
             const castBubbleSize = this.normalizeCastBubbleSize(el.castBubbleSize);
             const extraRules = [
                 `    #${safeId} img.content-media, #${safeId} .scroll-img, #${safeId} .cast-member img {\n        ${mediaProps.join(';\n        ')};\n    }`,
                 `    #${safeId} .genre-pill {\n        ${[
-                    contentStrokeWidth > 0 ? `border: ${contentStrokeWidth}${contentStrokeUnit} solid ${contentStrokeColor}` : '',
-                    contentShadowCss ? `box-shadow: ${contentShadowCss}` : ''
+                    contentStrokeWidth > 0 && contentStrokePosition === 'inside' ? `border: ${contentStrokeWidth}${contentStrokeUnit} solid ${contentStrokeColor}` : '',
+                    (outsideStrokeBoxShadow || contentShadowCss) ? `box-shadow: ${[outsideStrokeBoxShadow, contentShadowCss].filter(Boolean).join(', ')}` : ''
                 ].filter(Boolean).join(';\n        ') || 'border: none'};\n    }`,
                 `    #${safeId} .cast-member {\n        width: ${Math.max(44, castBubbleSize + 18)}px;\n    }`,
                 `    #${safeId} .cast-member img {\n        width: ${castBubbleSize}px;\n        height: ${castBubbleSize}px;\n    }`
             ];
+            if (textStrokeProps.length) {
+                extraRules.push(`    #${safeId} .text-content, #${safeId} .genre-pill, #${safeId} .cast-member p, #${safeId} .star-filled, #${safeId} .star-empty {\n        ${textStrokeProps.join(';\n        ')};\n    }`);
+            }
 
             return `    /* ${this.escapeHtml(this.formatTypeName(el.type))} */\n    #${safeId} {\n        ${props.join(';\n        ')};\n    }\n${extraRules.join('\n')}`;
         }).join('\n\n');
@@ -3868,6 +3982,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
               `data-image-fit="${this.escapeHtml(el.imageFit || 'cover')}"`,
               `data-cast-bubble-size="${this.getCastBubbleSize(el)}"`
             ];
+            if (el.type === 'tmdb-cast') attrs.push(`data-cast-count="${this.getCastCount(el)}"`);
             const transitionAnimation = this.getTransitionAnimationCss(el, visibleElements);
             if (transitionAnimation) attrs.push(`data-transition-animation="${this.escapeHtml(transitionAnimation)}"`);
             if (sourceId) attrs.push(`data-source-id="${this.escapeHtml(sourceId)}"`);
@@ -3886,7 +4001,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
             const imgStyle = `width:100%;height:100%;object-fit:${this.escapeHtml(el.imageFit || 'cover')};object-position:${this.escapeHtml(this.getContentObjectPosition(el))};border-radius:${this.clampNumber(el.styles.borderRadius, 0, 0, 500)}px;`;
             let content = '';
-            if (el.type === 'text') content = this.escapeHtml(el.content);
+            if (el.type === 'text') content = `<span class="text-content">${this.escapeHtml(el.content)}</span>`;
             else if (el.type === 'image') content = `<img class="content-media" src="${this.escapeHtml(el.content)}" style="${imgStyle}" alt="Image">`;
             else if (el.type === 'tmdb-poster-scroll') content = '<div class="poster-scroll-container" style="display:flex; gap:10px; overflow-x:hidden; height:100%;"></div>';
 
@@ -4159,6 +4274,13 @@ if (isset($_GET['tmdb_source'])) {
 ${cssRules}
 
     /* --- Utility Classes for Dynamic Content --- */
+    .text-content {
+        display: block;
+        width: 100%;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+
     .genre-pill {
         background: linear-gradient(90deg, #90cea1 0%, #01b4e4 100%);
         color: #0d253f;

@@ -386,8 +386,7 @@
                          [style.justifyContent]="getContentVerticalFlex(element)"
                          [style.textAlign]="getContentTextAlign(element)"
                          [style.textShadow]="formatContentTextShadow(element)"
-                         [style.webkitTextStroke]="formatContentTextStroke(element)"
-                         [style.textStroke]="formatContentTextStroke(element)">{{ element.content }}</div>
+                         [ngStyle]="getContentTextStrokeStyles(element)">{{ element.content }}</div>
                   }
                   @case ('image') {
                     <img [src]="element.content" class="w-full h-full pointer-events-none content-media"
@@ -395,6 +394,7 @@
                          [style.object-position]="getContentObjectPosition(element)"
                          [style.borderRadius.px]="element.styles.borderRadius"
                          [style.border]="formatContentMediaBorder(element)"
+                         [style.boxShadow]="formatContentMediaBoxShadow(element)"
                          [style.filter]="formatContentDropShadow(element)">
                   }
 
@@ -403,8 +403,7 @@
                            [style.justifyContent]="getContentVerticalFlex(element)"
                            [style.textAlign]="getContentTextAlign(element)"
                            [style.textShadow]="formatContentTextShadow(element)"
-                           [style.webkitTextStroke]="formatContentTextStroke(element)"
-                           [style.textStroke]="formatContentTextStroke(element)">
+                           [ngStyle]="getContentTextStrokeStyles(element)">
                           @if (element.tmdbData) {
                               {{ element.dataPrefix }}{{ resolveDataPath(element.tmdbData, element.dataPath || '') }}{{ element.dataSuffix }}
                           } @else {
@@ -413,18 +412,18 @@
                       </div>
                   }
 
-                  @case ('tmdb-poster') { @if (element.tmdbData?.poster_path) { <img [src]="'https://image.tmdb.org/t/p/w500' + element.tmdbData.poster_path" class="w-full h-full pointer-events-none content-media" [style.object-fit]="element.imageFit" [style.object-position]="getContentObjectPosition(element)" [style.border]="formatContentMediaBorder(element)" [style.filter]="formatContentDropShadow(element)"> } @else { <div class="w-full h-full flex items-center justify-center bg-[#183352] text-[#64839e]"><i class="fa-solid fa-ticket text-4xl"></i></div> } }
-                  @case ('tmdb-backdrop') { @if (element.tmdbData?.backdrop_path) { <img [src]="'https://image.tmdb.org/t/p/w1280' + element.tmdbData.backdrop_path" class="w-full h-full pointer-events-none content-media" [style.object-fit]="element.imageFit" [style.object-position]="getContentObjectPosition(element)" [style.border]="formatContentMediaBorder(element)" [style.filter]="formatContentDropShadow(element)"> } @else { <div class="w-full h-full flex items-center justify-center bg-[#183352] text-[#64839e]"><i class="fa-solid fa-image text-4xl"></i></div> } }
-                  @case ('tmdb-logo') { @if (getBestLogo(element)) { <img [src]="getBestLogo(element)" class="w-full h-full p-2 pointer-events-none content-media" [style.object-fit]="element.imageFit" [style.object-position]="getContentObjectPosition(element)" [style.border]="formatContentMediaBorder(element)" [style.filter]="formatContentDropShadow(element)"> } @else { <div class="p-2 w-full h-full pointer-events-none whitespace-pre-wrap flex flex-col font-bold" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [style.webkitTextStroke]="formatContentTextStroke(element)" [style.textStroke]="formatContentTextStroke(element)">{{ getLogoFallbackTitle(element) }}</div> } }
-                  @case ('tmdb-title') { <div class="p-2 w-full h-full pointer-events-none flex flex-col" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [style.webkitTextStroke]="formatContentTextStroke(element)" [style.textStroke]="formatContentTextStroke(element)">{{ element.tmdbData?.title || element.tmdbData?.name || 'Movie Title' }}</div> }
-                  @case ('tmdb-overview') { <div class="p-2 overflow-hidden h-full w-full pointer-events-none flex flex-col" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [style.webkitTextStroke]="formatContentTextStroke(element)" [style.textStroke]="formatContentTextStroke(element)">{{ element.tmdbData?.overview || 'Overview text placeholder...' }}</div> }
-                  @case ('tmdb-tagline') { <div class="p-2 opacity-80 w-full h-full pointer-events-none flex flex-col" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [style.webkitTextStroke]="formatContentTextStroke(element)" [style.textStroke]="formatContentTextStroke(element)">{{ element.tmdbData?.tagline || 'Tagline goes here...' }}</div> }
-                  @case ('tmdb-release-date') { <div class="p-2 w-full h-full pointer-events-none flex flex-col" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [style.webkitTextStroke]="formatContentTextStroke(element)" [style.textStroke]="formatContentTextStroke(element)">{{ element.tmdbData?.release_date || element.tmdbData?.first_air_date || '2024-01-01' }}</div> }
-                  @case ('tmdb-runtime') { <div class="p-2 w-full h-full pointer-events-none flex flex-col" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [style.webkitTextStroke]="formatContentTextStroke(element)" [style.textStroke]="formatContentTextStroke(element)">{{ (element.tmdbData?.runtime ?? element.tmdbData?.episode_run_time?.[0]) ? (element.tmdbData.runtime ?? element.tmdbData.episode_run_time[0]) + ' min' : '120 min' }}</div> }
-                  @case ('tmdb-season-episode-count') { <div class="p-2 w-full h-full flex flex-col pointer-events-none" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [style.webkitTextStroke]="formatContentTextStroke(element)" [style.textStroke]="formatContentTextStroke(element)">{{ element.tmdbData?.number_of_seasons ? element.tmdbData.number_of_seasons + ' Seasons' : 'Seasons / Episodes' }}</div> }
-                  @case ('tmdb-network-logo') { @if (getBestNetworkLogo(element)) { <img [src]="getBestNetworkLogo(element)" class="w-full h-full p-2 pointer-events-none content-media" [style.object-fit]="element.imageFit" [style.object-position]="getContentObjectPosition(element)" [style.border]="formatContentMediaBorder(element)" [style.filter]="formatContentDropShadow(element)"> } @else { <div class="p-2 w-full h-full pointer-events-none whitespace-pre-wrap flex flex-col font-bold" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [style.webkitTextStroke]="formatContentTextStroke(element)" [style.textStroke]="formatContentTextStroke(element)">{{ getLogoFallbackTitle(element) }}</div> } }
-                  @case ('tmdb-rating') { <div class="p-2 text-yellow-400 pointer-events-none w-full h-full flex" [style.justifyContent]="getContentJustifyContent(element)" [style.alignItems]="getContentAlignItems(element)" [style.textShadow]="formatContentTextShadow(element)" [style.webkitTextStroke]="formatContentTextStroke(element)" [style.textStroke]="formatContentTextStroke(element)"> @if(element.tmdbData?.vote_average){ @for(i of [].constructor(Math.round(element.tmdbData.vote_average/2)); track i){<span>★</span>} @for(i of [].constructor(5 - Math.round(element.tmdbData.vote_average/2)); track i){<span class="opacity-30">★</span>} } @else { <span>★★★★☆</span> } </div> }
-                  @case ('tmdb-genres') { <div class="p-2 flex flex-wrap gap-2 pointer-events-none w-full h-full" [style.justifyContent]="getContentJustifyContent(element)" [style.alignItems]="getContentAlignItems(element)"> @if(element.tmdbData?.genres) { @for(genre of element.tmdbData.genres; track genre.id) { <span class="genre-pill" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentBoxShadow(element)" [style.textShadow]="formatContentTextShadow(element)" [style.webkitTextStroke]="formatContentTextStroke(element)" [style.textStroke]="formatContentTextStroke(element)">{{genre.name}}</span> } } @else { <span class="genre-pill" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentBoxShadow(element)">Action</span><span class="genre-pill" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentBoxShadow(element)">Drama</span> } </div> }
+                  @case ('tmdb-poster') { @if (element.tmdbData?.poster_path) { <img [src]="'https://image.tmdb.org/t/p/w500' + element.tmdbData.poster_path" class="w-full h-full pointer-events-none content-media" [style.object-fit]="element.imageFit" [style.object-position]="getContentObjectPosition(element)" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentMediaBoxShadow(element)" [style.filter]="formatContentDropShadow(element)"> } @else { <div class="w-full h-full flex items-center justify-center bg-[#183352] text-[#64839e]"><i class="fa-solid fa-ticket text-4xl"></i></div> } }
+                  @case ('tmdb-backdrop') { @if (element.tmdbData?.backdrop_path) { <img [src]="'https://image.tmdb.org/t/p/w1280' + element.tmdbData.backdrop_path" class="w-full h-full pointer-events-none content-media" [style.object-fit]="element.imageFit" [style.object-position]="getContentObjectPosition(element)" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentMediaBoxShadow(element)" [style.filter]="formatContentDropShadow(element)"> } @else { <div class="w-full h-full flex items-center justify-center bg-[#183352] text-[#64839e]"><i class="fa-solid fa-image text-4xl"></i></div> } }
+                  @case ('tmdb-logo') { @if (getBestLogo(element)) { <img [src]="getBestLogo(element)" class="w-full h-full p-2 pointer-events-none content-media" [style.object-fit]="element.imageFit" [style.object-position]="getContentObjectPosition(element)" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentMediaBoxShadow(element)" [style.filter]="formatContentDropShadow(element)"> } @else { <div class="p-2 w-full h-full pointer-events-none whitespace-pre-wrap flex flex-col font-bold" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{ getLogoFallbackTitle(element) }}</div> } }
+                  @case ('tmdb-title') { <div class="p-2 w-full h-full pointer-events-none flex flex-col" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{ element.tmdbData?.title || element.tmdbData?.name || 'Movie Title' }}</div> }
+                  @case ('tmdb-overview') { <div class="p-2 overflow-hidden h-full w-full pointer-events-none flex flex-col" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{ element.tmdbData?.overview || 'Overview text placeholder...' }}</div> }
+                  @case ('tmdb-tagline') { <div class="p-2 opacity-80 w-full h-full pointer-events-none flex flex-col" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{ element.tmdbData?.tagline || 'Tagline goes here...' }}</div> }
+                  @case ('tmdb-release-date') { <div class="p-2 w-full h-full pointer-events-none flex flex-col" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{ element.tmdbData?.release_date || element.tmdbData?.first_air_date || '2024-01-01' }}</div> }
+                  @case ('tmdb-runtime') { <div class="p-2 w-full h-full pointer-events-none flex flex-col" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{ (element.tmdbData?.runtime ?? element.tmdbData?.episode_run_time?.[0]) ? (element.tmdbData.runtime ?? element.tmdbData.episode_run_time[0]) + ' min' : '120 min' }}</div> }
+                  @case ('tmdb-season-episode-count') { <div class="p-2 w-full h-full flex flex-col pointer-events-none" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{ element.tmdbData?.number_of_seasons ? element.tmdbData.number_of_seasons + ' Seasons' : 'Seasons / Episodes' }}</div> }
+                  @case ('tmdb-network-logo') { @if (getBestNetworkLogo(element)) { <img [src]="getBestNetworkLogo(element)" class="w-full h-full p-2 pointer-events-none content-media" [style.object-fit]="element.imageFit" [style.object-position]="getContentObjectPosition(element)" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentMediaBoxShadow(element)" [style.filter]="formatContentDropShadow(element)"> } @else { <div class="p-2 w-full h-full pointer-events-none whitespace-pre-wrap flex flex-col font-bold" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{ getLogoFallbackTitle(element) }}</div> } }
+                  @case ('tmdb-rating') { <div class="p-2 text-yellow-400 pointer-events-none w-full h-full flex" [style.justifyContent]="getContentJustifyContent(element)" [style.alignItems]="getContentAlignItems(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)"> @if(element.tmdbData?.vote_average){ @for(i of [].constructor(Math.round(element.tmdbData.vote_average/2)); track i){<span>★</span>} @for(i of [].constructor(5 - Math.round(element.tmdbData.vote_average/2)); track i){<span class="opacity-30">★</span>} } @else { <span>★★★★☆</span> } </div> }
+                  @case ('tmdb-genres') { <div class="p-2 flex flex-wrap gap-2 pointer-events-none w-full h-full" [style.justifyContent]="getContentJustifyContent(element)" [style.alignItems]="getContentAlignItems(element)"> @if(element.tmdbData?.genres) { @for(genre of element.tmdbData.genres; track genre.id) { <span class="genre-pill" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentBoxShadow(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{genre.name}}</span> } } @else { <span class="genre-pill" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentBoxShadow(element)">Action</span><span class="genre-pill" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentBoxShadow(element)">Drama</span> } </div> }
                   @case ('tmdb-poster-scroll') {
                     <div class="w-full h-full flex overflow-x-hidden p-2 gap-3 pointer-events-none"
                          [style.justifyContent]="getContentJustifyContent(element)"
@@ -432,7 +431,7 @@
                       <div class="poster-scroll-container flex gap-3 h-full">
                         @if (element.tmdbData?.results) {
                             @for(item of getPosterScrollItems(element); track item.id) {
-                                <img [src]="'https://image.tmdb.org/t/p/w500' + item.poster_path" class="h-full w-auto inline-block rounded content-media" [style.border]="formatContentMediaBorder(element)" [style.filter]="formatContentDropShadow(element)">
+                                <img [src]="'https://image.tmdb.org/t/p/w500' + item.poster_path" class="h-full w-auto inline-block rounded content-media" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentMediaBoxShadow(element)" [style.filter]="formatContentDropShadow(element)">
                             }
                         } @else {
                             <div class="flex gap-2 opacity-50"><div class="h-32 w-20 bg-[#183352] rounded"></div><div class="h-32 w-20 bg-[#183352] rounded"></div><div class="h-32 w-20 bg-[#183352] rounded"></div></div>
@@ -452,17 +451,17 @@
                                  [style.width.px]="getCastBubbleSize(element)"
                                  [style.height.px]="getCastBubbleSize(element)"
                                  [style.border]="formatContentMediaBorder(element)"
+                                 [style.boxShadow]="formatContentMediaBoxShadow(element)"
                                  [style.filter]="formatContentDropShadow(element)">
                             <span class="truncate w-full opacity-80"
                                   [style.textShadow]="formatContentTextShadow(element)"
-                                  [style.webkitTextStroke]="formatContentTextStroke(element)"
-                                  [style.textStroke]="formatContentTextStroke(element)">{{actor.name}}</span>
+                                  [ngStyle]="getContentTextStrokeStyles(element)">{{actor.name}}</span>
                           </div>
                         }
                       } @else {
                         <div class="flex gap-4 opacity-50" [style.justifyContent]="getContentJustifyContent(element)" [style.alignItems]="getContentAlignItems(element)">
-                          <div class="rounded-full bg-[#183352]" [style.width.px]="getCastBubbleSize(element)" [style.height.px]="getCastBubbleSize(element)" [style.border]="formatContentMediaBorder(element)" [style.filter]="formatContentDropShadow(element)"></div>
-                          <div class="rounded-full bg-[#183352]" [style.width.px]="getCastBubbleSize(element)" [style.height.px]="getCastBubbleSize(element)" [style.border]="formatContentMediaBorder(element)" [style.filter]="formatContentDropShadow(element)"></div>
+                          <div class="rounded-full bg-[#183352]" [style.width.px]="getCastBubbleSize(element)" [style.height.px]="getCastBubbleSize(element)" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentMediaBoxShadow(element)" [style.filter]="formatContentDropShadow(element)"></div>
+                          <div class="rounded-full bg-[#183352]" [style.width.px]="getCastBubbleSize(element)" [style.height.px]="getCastBubbleSize(element)" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentMediaBoxShadow(element)" [style.filter]="formatContentDropShadow(element)"></div>
                         </div>
                       }
                     </div>
@@ -870,6 +869,17 @@
               }
               @if(el.type === 'tmdb-cast') {
                   <div class="p-4 border-b border-[#183352] space-y-3">
+                      <div>
+                        <label class="label flex justify-between items-center">
+                          Cast Shown
+                          <span class="text-[10px] font-normal text-[#8eaec4]">{{ getCastCount(el) }}</span>
+                        </label>
+                        <select [ngModel]="getCastCount(el)" (ngModelChange)="updateCastCount(el.id, +$event)" class="select text-xs">
+                          @for(count of castCountOptions; track count) {
+                            <option [value]="count">{{ count }} actor{{ count === 1 ? '' : 's' }}</option>
+                          }
+                        </select>
+                      </div>
                       <label class="label">Cast Bubble Size</label>
                       <select [ngModel]="getCastBubbleSize(el)" (ngModelChange)="updateCastBubbleSize(el.id, +$event)" class="select text-xs">
                         @for(size of castBubbleSizeOptions; track size) {
@@ -1151,19 +1161,29 @@
 
                  @if(el.type !== 'shape') {
                    <div class="p-3 bg-[#0a1724] rounded border border-[#254261] space-y-3">
-                      <div>
-                        <label class="label">Content Stroke</label>
+                      <label class="flex items-center justify-between gap-3 text-xs text-[#8eaec4] cursor-pointer">
+                          <span class="label mb-0">Content Stroke</span>
+                          <input type="checkbox" [ngModel]="isContentStrokeEnabled(el)" (ngModelChange)="toggleContentStroke(el.id, $event)" class="rounded bg-[#0a1724] border-[#254261] text-[#01b4e4] focus:ring-[#01b4e4]">
+                      </label>
+                      @if(isContentStrokeEnabled(el)) {
                         <div class="flex gap-2">
                           <input type="number" min="0" step="0.1" [ngModel]="el.styles.contentStrokeWidth ?? el.styles.textStrokeWidth ?? 0" (ngModelChange)="updateElementStyle('contentStrokeWidth', +$event)" class="input">
                           <select [ngModel]="el.styles.contentStrokeUnit || el.styles.textStrokeUnit || 'px'" (ngModelChange)="updateElementStyle('contentStrokeUnit', $event)" class="select w-20 px-2">
                             @for(unit of fontSizeUnits; track unit) { <option [value]="unit">{{unit}}</option> }
                           </select>
                         </div>
+                        <div>
+                          <label class="label">Position</label>
+                          <select [ngModel]="getContentStrokePosition(el)" (ngModelChange)="updateElementStyle('contentStrokePosition', $event)" class="select text-xs">
+                            <option value="outside">Outside</option>
+                            <option value="inside">Inside</option>
+                          </select>
+                        </div>
                         <div class="flex items-center gap-2 mt-2">
                           <input type="color" [ngModel]="el.styles.contentStrokeColor || el.styles.textStrokeColor || '#000000'" (ngModelChange)="updateElementStyle('contentStrokeColor', $event)" class="w-8 h-8 rounded bg-transparent cursor-pointer border-none p-0">
                           <input type="text" [ngModel]="el.styles.contentStrokeColor || el.styles.textStrokeColor || '#000000'" (ngModelChange)="updateElementStyle('contentStrokeColor', $event)" class="input text-xs uppercase">
                         </div>
-                      </div>
+                      }
 
                       <label class="flex items-center justify-between gap-3 text-xs text-[#8eaec4] cursor-pointer">
                           <span class="label mb-0">Content Shadow</span>
