@@ -263,7 +263,7 @@
     </div>
 
     <div class="p-3 border-t border-[#183352] text-center text-xs text-[#64839e]">
-        Made with ❤️ by <a href="https://t.me/ianwoneill" target="_blank" class="text-[#01b4e4] hover:underline">Ian</a> and<a href="https://t.me/schrodingerspussy" target="_blank" class="text-[#01b4e4] hover:underline">TheCat</a>
+        Made with ❤️ by <a href="https://t.me/ianwoneill" target="_blank" rel="noopener noreferrer" class="text-[#01b4e4] hover:underline">Ian</a> and<a href="https://t.me/schrodingerspussy" target="_blank" rel="noopener noreferrer" class="text-[#01b4e4] hover:underline">TheCat</a>
     </div>
   </aside>
 
@@ -368,7 +368,7 @@
               [style.borderWidth.px]="element.styles.borderWidth" [style.borderColor]="element.styles.borderColor"
               [style.borderStyle]="element.styles.borderWidth > 0 ? 'solid' : 'none'"
               [style.opacity]="element.styles.opacity"
-              [style.boxShadow]="element.styles.boxShadow ? `${element.styles.boxShadow.x}px ${element.styles.boxShadow.y}px ${element.styles.boxShadow.blur}px ${element.styles.boxShadow.color}` : null"
+              [style.boxShadow]="formatElementBoxShadow(element)"
               [style.animation]="previewMode() ? getElementAnimation(element) : null"
               [style.backdropFilter]="(element.styles.filterBlur > 0 || element.styles.filterGrayscale > 0) ? 'blur(' + element.styles.filterBlur + 'px) grayscale(' + element.styles.filterGrayscale + ')' : null"
               [style.webkitBackdropFilter]="(element.styles.filterBlur > 0 || element.styles.filterGrayscale > 0) ? 'blur(' + element.styles.filterBlur + 'px) grayscale(' + element.styles.filterGrayscale + ')' : null"
@@ -423,7 +423,7 @@
                   @case ('tmdb-season-episode-count') { <div class="p-2 w-full h-full flex flex-col pointer-events-none" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{ element.tmdbData?.number_of_seasons ? element.tmdbData.number_of_seasons + ' Seasons' : 'Seasons / Episodes' }}</div> }
                   @case ('tmdb-network-logo') { @if (getBestNetworkLogo(element)) { <img [src]="getBestNetworkLogo(element)" class="w-full h-full p-2 pointer-events-none content-media" [style.object-fit]="element.imageFit" [style.object-position]="getContentObjectPosition(element)" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentMediaBoxShadow(element)" [style.filter]="formatContentDropShadow(element)"> } @else { <div class="p-2 w-full h-full pointer-events-none whitespace-pre-wrap flex flex-col font-bold" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{ getLogoFallbackTitle(element) }}</div> } }
                   @case ('tmdb-rating') { <div class="p-2 text-yellow-400 pointer-events-none w-full h-full flex" [style.justifyContent]="getContentJustifyContent(element)" [style.alignItems]="getContentAlignItems(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)"> @if(element.tmdbData?.vote_average){ @for(i of [].constructor(Math.round(element.tmdbData.vote_average/2)); track i){<span>★</span>} @for(i of [].constructor(5 - Math.round(element.tmdbData.vote_average/2)); track i){<span class="opacity-30">★</span>} } @else { <span>★★★★☆</span> } </div> }
-                  @case ('tmdb-genres') { <div class="p-2 flex flex-wrap gap-2 pointer-events-none w-full h-full" [style.justifyContent]="getContentJustifyContent(element)" [style.alignItems]="getContentAlignItems(element)"> @if(element.tmdbData?.genres) { @for(genre of element.tmdbData.genres; track genre.id) { <span class="genre-pill" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentBoxShadow(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{genre.name}}</span> } } @else { <span class="genre-pill" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentBoxShadow(element)">Action</span><span class="genre-pill" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentBoxShadow(element)">Drama</span> } </div> }
+                  @case ('tmdb-genres') { <div class="p-2 flex flex-wrap gap-2 pointer-events-none w-full h-full" [style.justifyContent]="getContentJustifyContent(element)" [style.alignItems]="getContentAlignItems(element)"> @if(element.tmdbData?.genres) { @for(genre of element.tmdbData.genres; track genre.id) { <span class="genre-pill" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentBoxShadow(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{genre.name}}</span> } } @else { <span class="genre-pill" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentBoxShadow(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">Action</span><span class="genre-pill" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentBoxShadow(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">Drama</span> } </div> }
                   @case ('tmdb-poster-scroll') {
                     <div class="w-full h-full flex overflow-x-hidden p-2 gap-3 pointer-events-none"
                          [style.justifyContent]="getContentJustifyContent(element)"
@@ -469,7 +469,10 @@
                   @case ('tmdb-backdrop-slideshow') {
                       @if (slideshowState()[element.id]?.backdrops.length) {
                           @let state = slideshowState()[element.id];
-                          <div class="absolute inset-0 overflow-hidden pointer-events-none">
+                          <div class="absolute inset-0 overflow-hidden pointer-events-none"
+                               [style.border]="formatContentMediaBorder(element)"
+                               [style.boxShadow]="formatContentMediaBoxShadow(element)"
+                               [style.filter]="formatContentDropShadow(element)">
                             <div class="absolute inset-0 bg-cover bg-center pointer-events-none"
                                  [style.zIndex]="1"
                                  [style.backgroundImage]="'url(' + state.backdrops[state.idx2] + ')'"></div>

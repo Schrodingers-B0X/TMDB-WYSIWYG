@@ -238,7 +238,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   multiSelectMode = signal(false);
 
   // Auth Settings
-  authMethod = signal<'v3' | 'v4'>((localStorage.getItem('tmdbAuthMethod') as 'v3' | 'v4') || 'v4');
+  authMethod = signal<'v3' | 'v4'>(localStorage.getItem('tmdbAuthMethod') === 'v3' ? 'v3' : 'v4');
   tmdbReadToken = signal<string>(localStorage.getItem('tmdbReadToken') || '');
   tmdbApiKey = signal<string>(localStorage.getItem('tmdbApiKey') || '');
   tmdbUser = signal<TmdbUser | null>(null);
@@ -547,7 +547,19 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   formatContentMediaBoxShadow(element: CanvasElement): string | null {
+    if (this.shouldRenderOutsideStrokeOnElement(element)) return null;
     return this.formatContentOutsideStrokeBoxShadow(element);
+  }
+
+  private shouldRenderOutsideStrokeOnElement(element: CanvasElement): boolean {
+    return ['image', 'tmdb-poster', 'tmdb-backdrop', 'tmdb-logo', 'tmdb-network-logo', 'tmdb-backdrop-slideshow'].includes(element.type);
+  }
+
+  formatElementBoxShadow(element: CanvasElement): string | null {
+    return [
+      this.formatShadow(element.styles.boxShadow),
+      this.shouldRenderOutsideStrokeOnElement(element) ? this.formatContentOutsideStrokeBoxShadow(element) : null
+    ].filter(Boolean).join(', ') || null;
   }
 
   isContentStrokeEnabled(element: CanvasElement): boolean {
@@ -936,6 +948,14 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     return candidates[0] || (this.isCollectionElement(element) ? element : null);
   }
 
+  private getEffectiveCollectionSourceElement(element: CanvasElement, elements = this.elements()): CanvasElement {
+    if (!this.isCollectionElement(element)) return element;
+    const explicitSource = element.syncedToElementId
+      ? elements.find(el => el.id === element.syncedToElementId && this.isCollectionElement(el))
+      : null;
+    return explicitSource || this.getCollectionMasterForElement(element, elements) || element;
+  }
+
   isCollectionMaster(element: CanvasElement): boolean {
     return this.getCollectionMasterForElement(element)?.id === element.id;
   }
@@ -1014,15 +1034,24 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   constructor() {
-    effect(() => localStorage.setItem('tmdbAuthMethod', this.authMethod()));
+    effect(() => {
+        localStorage.setItem('tmdbAuthMethod', this.authMethod());
+        this.tmdbUser.set(null);
+        this.isAuthValid.set(false);
+        this.authCheckSubject.next();
+    }, { allowSignalWrites: true });
     effect(() => {
         localStorage.setItem('tmdbReadToken', this.tmdbReadToken());
+        this.tmdbUser.set(null);
+        this.isAuthValid.set(false);
         this.authCheckSubject.next();
-    });
+    }, { allowSignalWrites: true });
     effect(() => {
         localStorage.setItem('tmdbApiKey', this.tmdbApiKey());
+        this.tmdbUser.set(null);
+        this.isAuthValid.set(false);
         this.authCheckSubject.next();
-    });
+    }, { allowSignalWrites: true });
     effect(() => localStorage.setItem('tmdbWatchRegion', this.watchRegion()));
     effect(() => localStorage.setItem('tmdbLanguage', this.language()));
     effect(() => localStorage.setItem('tmdbIncludeAdult', this.includeAdult().toString()));
@@ -1099,8 +1128,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   ngOnDestroy() {
       this.destroy$.next();
       this.destroy$.complete();
-      this.slideshowIntervals.forEach(interval => clearInterval(interval));
-      this.posterScrollIntervals.forEach(interval => clearInterval(interval));
+      this.clearCollectionRuntime();
   }
 
   // --- HOST LISTENERS ---
@@ -1139,6 +1167,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
                 event.preventDefault();
                 this.updateElementProperty('x', newX, true);
                 this.updateElementProperty('y', newY, true);
+                this.saveStateToHistory();
             }
         }
     }
@@ -1187,7 +1216,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   openTmdbSettings() {
-      window.open('https://www.themoviedb.org/settings/api', '_blank');
+      window.open('https://www.themoviedb.org/settings/api', '_blank', 'noopener,noreferrer');
   }
 
   // --- CANVAS CONTROLS ---
@@ -1428,6 +1457,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       const { relativeToElementId, relativeSide, relativeGap, relativeMatchSize, ...rest } = el;
       return rest as CanvasElement;
     });
+    this.clearCollectionRuntime();
     this.elements.set(this.applyRelativeLayoutToElements(cleanedElements));
     this.selectedElementId.set(null);
     this.selectedElementIds.set([]);
@@ -1515,6 +1545,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   restoreStateFromHistory() {
     const state = this.history()[this.historyIndex()];
     if (state) {
+      this.clearCollectionRuntime();
       this.elements.set(state.elements);
       this.selectedElementId.set(state.selectedElementId);
       this.selectedElementIds.set(state.selectedElementIds || (state.selectedElementId ? [state.selectedElementId] : []));
@@ -1524,6 +1555,31 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         if (el.type === 'tmdb-poster-scroll') this.setupPosterScroll(el.id);
       });
     }
+  }
+
+  private clearCollectionRuntime(elementId?: string) {
+    const clearFromMap = (map: Map<string, any>, id: string) => {
+      if (!map.has(id)) return;
+      clearInterval(map.get(id));
+      map.delete(id);
+    };
+
+    if (elementId) {
+      clearFromMap(this.slideshowIntervals, elementId);
+      clearFromMap(this.posterScrollIntervals, elementId);
+      this.slideshowState.update(state => {
+        if (!state[elementId]) return state;
+        const { [elementId]: _removed, ...rest } = state;
+        return rest;
+      });
+      return;
+    }
+
+    this.slideshowIntervals.forEach(interval => clearInterval(interval));
+    this.posterScrollIntervals.forEach(interval => clearInterval(interval));
+    this.slideshowIntervals.clear();
+    this.posterScrollIntervals.clear();
+    this.slideshowState.set({});
   }
 
   // --- ELEMENT MANIPULATION ---
@@ -1628,8 +1684,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     this.selectedElementIds.set(remainingSelection);
     if (this.selectedElementId() === id) this.selectedElementId.set(remainingSelection[remainingSelection.length - 1] || null);
     if (remainingSelection.length === 0) this.multiSelectMode.set(false);
-    if(this.slideshowIntervals.has(id)) { clearInterval(this.slideshowIntervals.get(id)); this.slideshowIntervals.delete(id); }
-    if(this.posterScrollIntervals.has(id)) { clearInterval(this.posterScrollIntervals.get(id)); this.posterScrollIntervals.delete(id); }
+    this.clearCollectionRuntime(id);
     this.saveStateToHistory();
   }
 
@@ -1642,10 +1697,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         .filter(el => idSet.has(el.id) && el.layoutGroupRole === 'background' && !!el.layoutGroupId)
         .map(el => el.layoutGroupId!)
     );
-    ids.forEach(id => {
-      if(this.slideshowIntervals.has(id)) { clearInterval(this.slideshowIntervals.get(id)); this.slideshowIntervals.delete(id); }
-      if(this.posterScrollIntervals.has(id)) { clearInterval(this.posterScrollIntervals.get(id)); this.posterScrollIntervals.delete(id); }
-    });
+    ids.forEach(id => this.clearCollectionRuntime(id));
     this.elements.update(els => this.applyRelativeLayoutToElements(els
       .filter(el => !idSet.has(el.id))
       .map(el => {
@@ -2462,7 +2514,8 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private getLimitedCollectionItems(element: CanvasElement): any[] {
-    const results = element.tmdbData?.results;
+    const source = this.getEffectiveCollectionSourceElement(element);
+    const results = source.tmdbData?.results;
     if (!Array.isArray(results) || results.length === 0) return [];
 
     return this.getLimitedCollectionItemsFromResults(element, results);
@@ -2499,8 +2552,9 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private getCollectionItemDetail(sourceEl: CanvasElement, item: any): any {
     if (!item) return null;
-    const details = sourceEl.tmdbData?.__detailsById || {};
-    const key = this.detailKeyForItem(item, sourceEl.tmdbCollectionType || sourceEl.tmdbItemType);
+    const source = this.getEffectiveCollectionSourceElement(sourceEl);
+    const details = source.tmdbData?.__detailsById || {};
+    const key = this.detailKeyForItem(item, source.tmdbCollectionType || source.tmdbItemType);
     return details[key] || details[String(item.id)] || item;
   }
 
@@ -2854,8 +2908,14 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       }
 
       this.elements.update(els => els.map(el => el.id === id ? {...el, tmdbData: data} : el));
-      if (element.type === 'tmdb-backdrop-slideshow') this.setupSlideshow(id);
-      if (element.type === 'tmdb-poster-scroll') this.setupPosterScroll(id);
+      const latestElements = this.elements();
+      const collectionViews = this.isCollectionElement(element)
+        ? latestElements.filter(el => this.isCollectionElement(el) && this.getEffectiveCollectionSourceElement(el, latestElements).id === id)
+        : [element];
+      collectionViews.forEach(el => {
+        if (el.type === 'tmdb-backdrop-slideshow') this.setupSlideshow(el.id);
+        if (el.type === 'tmdb-poster-scroll') this.setupPosterScroll(el.id);
+      });
       this.cdr.detectChanges();
     });
   }
@@ -2876,7 +2936,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   setupPosterScroll(elementId: string) {
-      if (this.posterScrollIntervals.has(elementId)) clearInterval(this.posterScrollIntervals.get(elementId));
+      this.clearCollectionRuntime(elementId);
       const element = this.elements().find(e => e.id === elementId);
       if (element) {
         this.propagateSourceItemToLinkedGroup(elementId, element, this.getLimitedCollectionItems(element)[0]);
@@ -2917,10 +2977,10 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   setupSlideshow(elementId: string) {
-    if (this.slideshowIntervals.has(elementId)) clearInterval(this.slideshowIntervals.get(elementId));
+    this.clearCollectionRuntime(elementId);
 
     const element = this.elements().find(e => e.id === elementId);
-    if (!element?.tmdbData?.results) return;
+    if (!element) return;
 
     const slideItems = this.getLimitedCollectionItems(element);
     const backdrops = slideItems.map((item: any) => 'https://image.tmdb.org/t/p/w1280' + item.backdrop_path);
@@ -3397,24 +3457,30 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
     for (const el of elements) {
       if (!el.type.startsWith('tmdb-')) continue;
+      if (!this.isCollectionElement(el) && el.linkGroup && linkedCollectionGroups.has(el.linkGroup)) {
+        continue;
+      }
 
+      const sourceEl = this.isCollectionElement(el)
+        ? this.getEffectiveCollectionSourceElement(el, elements)
+        : el;
       let source: any | null = null;
-      if (el.tmdbId && el.tmdbItemType && !this.isCollectionElement(el)) {
+      if (sourceEl.tmdbId && sourceEl.tmdbItemType && !this.isCollectionElement(sourceEl)) {
         source = {
           kind: 'detail',
-          itemType: el.tmdbItemType,
-          tmdbId: String(el.tmdbId),
+          itemType: sourceEl.tmdbItemType,
+          tmdbId: String(sourceEl.tmdbId),
           ttl: 21600
         };
-      } else if (el.tmdbEndpoint) {
+      } else if (sourceEl.tmdbEndpoint) {
         source = {
           kind: 'collection',
-          endpoint: el.tmdbEndpoint,
-          collectionType: el.tmdbCollectionType || 'movie',
-          discoverFilters: this.normalizeExportDiscoverFilters(el.discoverFilters),
+          endpoint: sourceEl.tmdbEndpoint,
+          collectionType: sourceEl.tmdbCollectionType || 'movie',
+          discoverFilters: this.normalizeExportDiscoverFilters(sourceEl.discoverFilters),
           limit: this.isCollectionElement(el) ? this.getEffectiveCollectionItemLimit(el, elements) : 1,
-          enrichLinked: !!el.linkGroup && linkedCollectionGroups.has(el.linkGroup),
-          enrichFirst: !this.isCollectionElement(el),
+          enrichLinked: !!sourceEl.linkGroup && linkedCollectionGroups.has(sourceEl.linkGroup),
+          enrichFirst: !this.isCollectionElement(sourceEl),
           ttl: 900
         };
       }
@@ -3652,6 +3718,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         const nextFrame = document.createElement('div');
         const currentFrame = document.createElement('div');
         [nextFrame, currentFrame].forEach(frame => {
+            frame.className = 'slideshow-frame';
             frame.style.position = 'absolute';
             frame.style.inset = '0';
             frame.style.backgroundSize = 'cover';
@@ -3757,7 +3824,11 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         const collectionResults = Array.isArray(data.results) ? data.results : null;
         const item = collectionResults ? detailForCollectionItem(data, collectionResults[0], data.__collectionType || el.dataset.itemType) : data;
 
-        if (type === 'tmdb-poster-scroll') return renderPosterScroll(el, data);
+        if (type === 'tmdb-poster-scroll') {
+            renderPosterScroll(el, data);
+            restartElementTransition(el);
+            return;
+        }
         if (type === 'tmdb-backdrop-slideshow') return renderBackdropSlideshow(el, data);
         if (!item) return;
 
@@ -3878,6 +3949,9 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
             const contentStrokeUnit = this.safeFontSizeUnit(s.contentStrokeUnit ?? s.textStrokeUnit);
             const contentStrokeColor = this.safeCssColor(s.contentStrokeColor || s.textStrokeColor, '#000000');
             const contentStrokePosition = this.normalizeStrokePosition(s.contentStrokePosition);
+            const outsideStrokeBoxShadow = contentStrokeWidth > 0 && contentStrokePosition === 'outside'
+              ? `0 0 0 ${contentStrokeWidth}${contentStrokeUnit} ${contentStrokeColor}`
+              : '';
             const contentShadow = s.contentShadow || s.textShadow;
             const contentShadowCss = contentShadow
                 ? `${this.clampNumber(contentShadow.x, 0, -500, 500)}px ${this.clampNumber(contentShadow.y, 0, -500, 500)}px ${this.clampNumber(contentShadow.blur, 0, 0, 500)}px ${this.safeCssColor(contentShadow.color, 'rgba(0,0,0,0.35)')}`
@@ -3917,7 +3991,11 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
             if (s.backgroundGradient) {
                 props.push(`background-image: linear-gradient(${this.clampNumber(s.backgroundGradient.angle, 0, 0, 360)}deg, ${this.safeCssColor(s.backgroundGradient.from, '#000000')}, ${this.safeCssColor(s.backgroundGradient.to, '#000000')})`);
             }
-            if (s.boxShadow) props.push(`box-shadow: ${this.clampNumber(s.boxShadow.x, 0, -500, 500)}px ${this.clampNumber(s.boxShadow.y, 0, -500, 500)}px ${this.clampNumber(s.boxShadow.blur, 0, 0, 500)}px ${this.safeCssColor(s.boxShadow.color, 'rgba(0,0,0,0.35)')}`);
+            const elementBoxShadows = [
+                s.boxShadow ? `${this.clampNumber(s.boxShadow.x, 0, -500, 500)}px ${this.clampNumber(s.boxShadow.y, 0, -500, 500)}px ${this.clampNumber(s.boxShadow.blur, 0, 0, 500)}px ${this.safeCssColor(s.boxShadow.color, 'rgba(0,0,0,0.35)')}` : '',
+                this.shouldRenderOutsideStrokeOnElement(el) ? outsideStrokeBoxShadow : ''
+            ].filter(Boolean);
+            if (elementBoxShadows.length > 0) props.push(`box-shadow: ${elementBoxShadows.join(', ')}`);
             if (contentShadowCss) props.push(`text-shadow: ${contentShadowCss}`);
 
             const filters = [];
@@ -3933,7 +4011,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
             const transitionAnimation = this.getTransitionAnimationCss(el, visibleElements);
             if (transitionAnimation) {
                 props.push(`--element-rotation: ${rotation}deg`);
-                props.push(`animation: ${transitionAnimation}`);
+                if (!el.type.startsWith('tmdb-')) props.push(`animation: ${transitionAnimation}`);
             }
 
             const safeId = this.safeElementId(el.id);
@@ -3944,20 +4022,17 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
                   `paint-order: ${contentStrokePosition === 'outside' ? 'stroke fill' : 'fill stroke'}`
                 ]
               : [];
-            const outsideStrokeBoxShadow = contentStrokeWidth > 0 && contentStrokePosition === 'outside'
-              ? `0 0 0 ${contentStrokeWidth}${contentStrokeUnit} ${contentStrokeColor}`
-              : '';
             const mediaProps = [
                 `box-sizing: border-box`,
                 `object-position: ${objectPosition}`
             ];
             if (contentStrokeWidth > 0 && contentStrokePosition === 'inside') mediaProps.push(`border: ${contentStrokeWidth}${contentStrokeUnit} solid ${contentStrokeColor}`);
-            if (outsideStrokeBoxShadow) mediaProps.push(`box-shadow: ${outsideStrokeBoxShadow}`);
+            if (outsideStrokeBoxShadow && !this.shouldRenderOutsideStrokeOnElement(el)) mediaProps.push(`box-shadow: ${outsideStrokeBoxShadow}`);
             if (contentDropShadowCss) mediaProps.push(`filter: ${contentDropShadowCss}`);
 
             const castBubbleSize = this.normalizeCastBubbleSize(el.castBubbleSize);
             const extraRules = [
-                `    #${safeId} img.content-media, #${safeId} .scroll-img, #${safeId} .cast-member img {\n        ${mediaProps.join(';\n        ')};\n    }`,
+                `    #${safeId} img.content-media, #${safeId} .scroll-img, #${safeId} .cast-member img, #${safeId} .slideshow-frame {\n        ${mediaProps.join(';\n        ')};\n    }`,
                 `    #${safeId} .genre-pill {\n        ${[
                     contentStrokeWidth > 0 && contentStrokePosition === 'inside' ? `border: ${contentStrokeWidth}${contentStrokeUnit} solid ${contentStrokeColor}` : '',
                     (outsideStrokeBoxShadow || contentShadowCss) ? `box-shadow: ${[outsideStrokeBoxShadow, contentShadowCss].filter(Boolean).join(', ')}` : ''
@@ -4122,6 +4197,8 @@ function tmdb_http_get_json($url, $config) {
         ));
         $body = @file_get_contents($url, false, $context);
         if ($body === false) return null;
+        $statusLine = isset($http_response_header[0]) ? $http_response_header[0] : '';
+        if (!preg_match('/\\s(2\\d\\d)\\s/', $statusLine)) return null;
     }
 
     $json = json_decode($body, true);
