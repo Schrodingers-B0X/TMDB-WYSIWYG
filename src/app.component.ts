@@ -16,6 +16,7 @@ interface DiscoverFilters { sortBy: string; genres: number[]; year: number | nul
 
 type TmdbItemType = 'movie' | 'tv' | 'person';
 type TmdbCollectionType = 'movie' | 'tv' | 'mixed';
+type GlobalDiscoverFilters = Record<'movie' | 'tv', DiscoverFilters>;
 type CanvasPreset = 'mobile' | 'tablet' | 'tv';
 type ElementType =
   | 'text' | 'image' | 'shape'
@@ -115,7 +116,17 @@ interface CanvasElement {
   dataSuffix?: string;
 }
 
-interface HistoryState { elements: CanvasElement[]; selectedElementId: string | null; selectedElementIds?: string[]; multiSelectMode?: boolean; }
+interface HistoryState {
+  elements: CanvasElement[];
+  selectedElementId: string | null;
+  selectedElementIds?: string[];
+  multiSelectMode?: boolean;
+  globalCollectionType?: TmdbCollectionType;
+  globalCollectionEndpoints?: Record<TmdbCollectionType, string>;
+  globalCollectionItemLimit?: number;
+  globalSlideshowDurationMs?: number;
+  globalDiscoverFilters?: GlobalDiscoverFilters;
+}
 interface ContextMenuState { visible: boolean; x: number; y: number; elementId: string | null; }
 interface TmdbGenre { id: number; name: string; }
 interface TmdbUser { id: number; username: string; avatar_path: string | null; name: string; }
@@ -150,6 +161,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly defaultSlideshowDurationMs = 5000;
   private readonly minSlideshowDurationMs = 1000;
   private readonly maxSlideshowDurationMs = 60000;
+  private readonly defaultCollectionLinkGroup = 'global_collection';
   private readonly defaultSnapIncrement = 20;
   private readonly posterAspectRatio = 2 / 3;
   private readonly sceneFadeDurationMs = 650;
@@ -162,6 +174,11 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly collectionItemLimitOptions = [5, 10, 15, 20, 30, 40];
   readonly snapIncrementOptions = [5, 10, 20, 25, 50, 100];
   readonly slideshowDurationOptions = [3, 5, 8, 10, 15, 30];
+  readonly collectionSourceTypeOptions: Array<{ value: TmdbCollectionType; label: string }> = [
+    { value: 'movie', label: 'Movies' },
+    { value: 'tv', label: 'TV Shows' },
+    { value: 'mixed', label: 'Movies + TV' }
+  ];
   readonly fontSizeUnits: FontSizeUnit[] = ['px', 'pt', 'em', 'rem'];
   readonly relativeSideOptions: Array<{ value: RelativeSide; label: string }> = [
     { value: 'right', label: 'Right of' },
@@ -218,6 +235,11 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         { key: 'trending/all/week', name: 'Trending This Week' }
     ]
   };
+  private readonly defaultCollectionEndpoints: Record<TmdbCollectionType, string> = {
+    movie: 'movie/popular',
+    tv: 'tv/popular',
+    mixed: 'trending/all/day'
+  };
   readonly discoverSortOptions = {
     movie: [
       { key: 'popularity.desc', name: 'Popularity' }, { key: 'vote_average.desc', name: 'Rating' },
@@ -248,6 +270,11 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   watchRegion = signal<string>(localStorage.getItem('tmdbWatchRegion') || 'US');
   language = signal<string>(localStorage.getItem('tmdbLanguage') || 'en-US');
   includeAdult = signal<boolean>(localStorage.getItem('tmdbIncludeAdult') === 'true');
+  globalCollectionType = signal<TmdbCollectionType>(this.readStoredCollectionType());
+  globalCollectionEndpoints = signal<Record<TmdbCollectionType, string>>(this.readStoredCollectionEndpoints());
+  globalCollectionItemLimit = signal<number>(this.normalizeCollectionItemLimit(localStorage.getItem('tmdbGlobalCollectionItemLimit')));
+  globalSlideshowDurationMs = signal<number>(this.normalizeSlideshowDurationMs(localStorage.getItem('tmdbGlobalSlideshowDurationMs')));
+  globalDiscoverFilters = signal<GlobalDiscoverFilters>(this.readStoredGlobalDiscoverFilters());
 
   // UI State
   readonly defaultResolutionByPreset: Record<CanvasPreset, string> = {
@@ -350,6 +377,30 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.tmdbEndpoints[el.tmdbCollectionType] || [];
   });
 
+  availableGlobalCollectionEndpoints = computed(() => this.tmdbEndpoints[this.globalCollectionType()] || []);
+  globalCollectionEndpointValue = computed(() => this.getGlobalCollectionEndpointForType(this.globalCollectionType()));
+  globalMovieCollectionEndpointValue = computed(() => this.getGlobalCollectionEndpointForType('movie'));
+  globalTvCollectionEndpointValue = computed(() => this.getGlobalCollectionEndpointForType('tv'));
+
+  availableGlobalSortOptions = computed(() => {
+    const type = this.globalCollectionType();
+    if (type === 'mixed' || this.globalCollectionEndpointValue() !== `discover/${type}`) return [];
+    return this.discoverSortOptions[type] || [];
+  });
+
+  availableGlobalGenres = computed(() => {
+    const type = this.globalCollectionType();
+    if (type === 'mixed' || this.globalCollectionEndpointValue() !== `discover/${type}`) return [];
+    return this.tmdbGenres()[type] || [];
+  });
+
+  getActiveGlobalDiscoverFilters(): DiscoverFilters {
+    const type = this.globalCollectionType();
+    return type === 'tv'
+      ? this.normalizeDiscoverFilters(this.globalDiscoverFilters().tv)
+      : this.normalizeDiscoverFilters(this.globalDiscoverFilters().movie);
+  }
+
   availableSortOptions = computed(() => {
     const el = this.selectedElement();
     if (!el || el.tmdbEndpoint !== `discover/${el.tmdbCollectionType}`) return [];
@@ -420,6 +471,64 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private normalizeStrokePosition(value: any): StrokePosition {
     return value === 'inside' ? 'inside' : 'outside';
+  }
+
+  private normalizeCollectionType(value: any): TmdbCollectionType {
+    return value === 'tv' || value === 'mixed' ? value : 'movie';
+  }
+
+  private defaultDiscoverFilters(): DiscoverFilters {
+    return { sortBy: 'popularity.desc', genres: [], year: null };
+  }
+
+  private normalizeDiscoverFilters(filters: any): DiscoverFilters {
+    return {
+      sortBy: typeof filters?.sortBy === 'string' ? filters.sortBy : 'popularity.desc',
+      genres: Array.isArray(filters?.genres) ? filters.genres.map(Number).filter(Number.isFinite) : [],
+      year: filters?.year ? Number(filters.year) : null
+    };
+  }
+
+  private readStoredCollectionType(): TmdbCollectionType {
+    return this.normalizeCollectionType(localStorage.getItem('tmdbGlobalCollectionType'));
+  }
+
+  private readStoredCollectionEndpoints(): Record<TmdbCollectionType, string> {
+    try {
+      const stored = JSON.parse(localStorage.getItem('tmdbGlobalCollectionEndpoints') || '{}');
+      return {
+        movie: this.normalizeCollectionEndpoint('movie', stored.movie),
+        tv: this.normalizeCollectionEndpoint('tv', stored.tv),
+        mixed: this.normalizeCollectionEndpoint('mixed', stored.mixed)
+      };
+    } catch {
+      return { ...this.defaultCollectionEndpoints };
+    }
+  }
+
+  private readStoredGlobalDiscoverFilters(): GlobalDiscoverFilters {
+    try {
+      const stored = JSON.parse(localStorage.getItem('tmdbGlobalDiscoverFilters') || '{}');
+      return {
+        movie: this.normalizeDiscoverFilters(stored.movie),
+        tv: this.normalizeDiscoverFilters(stored.tv)
+      };
+    } catch {
+      return {
+        movie: this.defaultDiscoverFilters(),
+        tv: this.defaultDiscoverFilters()
+      };
+    }
+  }
+
+  private normalizeCollectionEndpoint(type: TmdbCollectionType, endpoint: any): string {
+    const value = typeof endpoint === 'string' ? endpoint : '';
+    const options = this.tmdbEndpoints[type] || [];
+    return options.some(option => option.key === value) ? value : this.defaultCollectionEndpoints[type];
+  }
+
+  private getGlobalCollectionEndpointForType(type: TmdbCollectionType): string {
+    return this.normalizeCollectionEndpoint(type, this.globalCollectionEndpoints()[type]);
   }
 
   private getDefaultContentAlignXForType(type: ElementType | string, textAlign: any = 'left'): ContentAlignX {
@@ -1055,6 +1164,11 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     effect(() => localStorage.setItem('tmdbWatchRegion', this.watchRegion()));
     effect(() => localStorage.setItem('tmdbLanguage', this.language()));
     effect(() => localStorage.setItem('tmdbIncludeAdult', this.includeAdult().toString()));
+    effect(() => localStorage.setItem('tmdbGlobalCollectionType', this.globalCollectionType()));
+    effect(() => localStorage.setItem('tmdbGlobalCollectionEndpoints', JSON.stringify(this.globalCollectionEndpoints())));
+    effect(() => localStorage.setItem('tmdbGlobalCollectionItemLimit', this.globalCollectionItemLimit().toString()));
+    effect(() => localStorage.setItem('tmdbGlobalSlideshowDurationMs', this.globalSlideshowDurationMs().toString()));
+    effect(() => localStorage.setItem('tmdbGlobalDiscoverFilters', JSON.stringify(this.globalDiscoverFilters())));
 
     this.loadProjectFromLocalStorage();
 
@@ -1369,7 +1483,12 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       settings: {
         watchRegion: this.watchRegion(),
         language: this.language(),
-        includeAdult: this.includeAdult()
+        includeAdult: this.includeAdult(),
+        globalCollectionType: this.globalCollectionType(),
+        globalCollectionEndpoints: this.globalCollectionEndpoints(),
+        globalCollectionItemLimit: this.globalCollectionItemLimit(),
+        globalSlideshowDurationMs: this.globalSlideshowDurationMs(),
+        globalDiscoverFilters: this.globalDiscoverFilters()
       },
       elements: this.elements().map(el => this.normalizeElementForProject(el))
     };
@@ -1449,6 +1568,26 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     if (typeof project.settings?.watchRegion === 'string') this.watchRegion.set(project.settings.watchRegion);
     if (typeof project.settings?.language === 'string') this.language.set(project.settings.language);
     if (typeof project.settings?.includeAdult === 'boolean') this.includeAdult.set(project.settings.includeAdult);
+    if (project.settings?.globalCollectionType) this.globalCollectionType.set(this.normalizeCollectionType(project.settings.globalCollectionType));
+    if (project.settings?.globalCollectionEndpoints) {
+      this.globalCollectionEndpoints.set({
+        movie: this.normalizeCollectionEndpoint('movie', project.settings.globalCollectionEndpoints.movie),
+        tv: this.normalizeCollectionEndpoint('tv', project.settings.globalCollectionEndpoints.tv),
+        mixed: this.normalizeCollectionEndpoint('mixed', project.settings.globalCollectionEndpoints.mixed)
+      });
+    }
+    if (project.settings?.globalCollectionItemLimit !== undefined) {
+      this.globalCollectionItemLimit.set(this.normalizeCollectionItemLimit(project.settings.globalCollectionItemLimit));
+    }
+    if (project.settings?.globalSlideshowDurationMs !== undefined) {
+      this.globalSlideshowDurationMs.set(this.normalizeSlideshowDurationMs(project.settings.globalSlideshowDurationMs));
+    }
+    if (project.settings?.globalDiscoverFilters) {
+      this.globalDiscoverFilters.set({
+        movie: this.normalizeDiscoverFilters(project.settings.globalDiscoverFilters.movie),
+        tv: this.normalizeDiscoverFilters(project.settings.globalDiscoverFilters.tv)
+      });
+    }
 
     const restoredElements = project.elements.map((el: CanvasElement) => this.normalizeElementForProject(el));
     const restoredIds = new Set(restoredElements.map((el: CanvasElement) => el.id));
@@ -1526,10 +1665,15 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         elements: JSON.parse(JSON.stringify(this.elements())),
         selectedElementId: this.selectedElementId(),
         selectedElementIds: [...this.selectedElementIds()],
-        multiSelectMode: this.multiSelectMode()
+        multiSelectMode: this.multiSelectMode(),
+        globalCollectionType: this.globalCollectionType(),
+        globalCollectionEndpoints: { ...this.globalCollectionEndpoints() },
+        globalCollectionItemLimit: this.globalCollectionItemLimit(),
+        globalSlideshowDurationMs: this.globalSlideshowDurationMs(),
+        globalDiscoverFilters: JSON.parse(JSON.stringify(this.globalDiscoverFilters()))
       };
       const lastState = this.history()[this.historyIndex()];
-      if (lastState && JSON.stringify(lastState.elements) === JSON.stringify(currentState.elements)) return;
+      if (lastState && JSON.stringify(lastState) === JSON.stringify(currentState)) return;
 
       const newHistory = this.history().slice(0, this.historyIndex() + 1);
       newHistory.push(currentState);
@@ -1546,6 +1690,18 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     const state = this.history()[this.historyIndex()];
     if (state) {
       this.clearCollectionRuntime();
+      if (state.globalCollectionType) this.globalCollectionType.set(this.normalizeCollectionType(state.globalCollectionType));
+      if (state.globalCollectionEndpoints) this.globalCollectionEndpoints.set({
+        movie: this.normalizeCollectionEndpoint('movie', state.globalCollectionEndpoints.movie),
+        tv: this.normalizeCollectionEndpoint('tv', state.globalCollectionEndpoints.tv),
+        mixed: this.normalizeCollectionEndpoint('mixed', state.globalCollectionEndpoints.mixed)
+      });
+      if (state.globalCollectionItemLimit !== undefined) this.globalCollectionItemLimit.set(this.normalizeCollectionItemLimit(state.globalCollectionItemLimit));
+      if (state.globalSlideshowDurationMs !== undefined) this.globalSlideshowDurationMs.set(this.normalizeSlideshowDurationMs(state.globalSlideshowDurationMs));
+      if (state.globalDiscoverFilters) this.globalDiscoverFilters.set({
+        movie: this.normalizeDiscoverFilters(state.globalDiscoverFilters.movie),
+        tv: this.normalizeDiscoverFilters(state.globalDiscoverFilters.tv)
+      });
       this.elements.set(state.elements);
       this.selectedElementId.set(state.selectedElementId);
       this.selectedElementIds.set(state.selectedElementIds || (state.selectedElementId ? [state.selectedElementId] : []));
@@ -1583,9 +1739,25 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   // --- ELEMENT MANIPULATION ---
+  addCollectionSlideshow(collectionType: TmdbCollectionType) {
+    const type = this.normalizeCollectionType(collectionType);
+    this.globalCollectionType.set(type);
+    this.globalCollectionEndpoints.update(endpoints => ({
+      ...endpoints,
+      [type]: this.normalizeCollectionEndpoint(type, endpoints[type])
+    }));
+    this.applyGlobalCollectionSettingsToElements(false);
+    this.addElement('tmdb-backdrop-slideshow', this.globalCollectionItemType(type), type);
+  }
+
   addElement(type: ElementType, itemType: TmdbItemType = 'movie', collectionType?: TmdbCollectionType) {
     const isLogo = type === 'tmdb-logo' || type === 'tmdb-network-logo';
-    const resolvedCollectionType = collectionType || (itemType === 'tv' ? 'tv' : 'movie');
+    const isTmdbElement = type.startsWith('tmdb-');
+    const isCollectionElement = this.isCollectionElementType(type);
+    const resolvedCollectionType = isCollectionElement
+      ? this.normalizeCollectionType(collectionType || this.globalCollectionType())
+      : (collectionType || (itemType === 'tv' ? 'tv' : 'movie'));
+    const resolvedItemType = isCollectionElement ? this.globalCollectionItemType(resolvedCollectionType) : itemType;
     const currentScale = this.canvasConfig().width / 1920;
     const baseScale = this.selectedPreset() === 'mobile' ? 1 : (this.selectedPreset() === 'tablet' ? 1.5 : 2.5);
     const defaultContentAlignX = this.getDefaultContentAlignXForType(type, 'left');
@@ -1627,13 +1799,14 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
           filterBlur: 0,
           filterGrayscale: 0
       },
-      tmdbItemType: itemType,
+      tmdbItemType: resolvedItemType,
       tmdbCollectionType: resolvedCollectionType,
-      discoverFilters: { sortBy: 'popularity.desc', genres: [], year: null },
+      tmdbEndpoint: isCollectionElement ? this.getGlobalCollectionEndpointForType(resolvedCollectionType) : undefined,
+      discoverFilters: isCollectionElement ? this.getGlobalDiscoverFiltersForType(resolvedCollectionType) : { sortBy: 'popularity.desc', genres: [], year: null },
       imageFit: isLogo ? 'contain' : 'cover',
-      collectionItemLimit: this.isCollectionElementType(type) ? this.defaultCollectionItemLimit : undefined,
+      collectionItemLimit: isCollectionElement ? this.globalCollectionItemLimit() : undefined,
       globalSceneFade: false,
-      slideshowDurationMs: type === 'tmdb-backdrop-slideshow' ? this.defaultSlideshowDurationMs : undefined,
+      slideshowDurationMs: type === 'tmdb-backdrop-slideshow' ? this.globalSlideshowDurationMs() : undefined,
       snapToGrid: false,
       snapIncrement: this.defaultSnapIncrement,
       maintainAspectRatio: type === 'tmdb-poster',
@@ -1642,7 +1815,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       transitionDelayMs: 0,
       castBubbleSize: type === 'tmdb-cast' ? 48 : undefined,
       castCount: type === 'tmdb-cast' ? this.defaultCastCount : undefined,
-      linkGroup: '',
+      linkGroup: isTmdbElement ? this.defaultCollectionLinkGroup : '',
       dataPath: '',
       dataPrefix: '',
       dataSuffix: ''
@@ -2083,7 +2256,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   updateTmdbSourceType(elementId: string, value: TmdbCollectionType) {
     const selected = this.elements().find(el => el.id === elementId);
-    if (!selected || this.isSyncedWithLayer(selected)) return;
+    if (!selected) return;
 
     const endpointIsValid = (endpoint?: string) =>
       !endpoint || (this.tmdbEndpoints[value] || []).some(option => option.key === endpoint);
@@ -2107,7 +2280,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   updateTmdbEndpoint(elementId: string, value: string) {
     const selected = this.elements().find(el => el.id === elementId);
-    if (!selected || this.isSyncedWithLayer(selected)) return;
+    if (!selected) return;
 
     const endpoint = value || undefined;
     this.elements.update(els => els.map(el => el.id === elementId ? {
@@ -2400,6 +2573,120 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     this.saveStateToHistory();
   }
 
+  private getGlobalDiscoverFiltersForType(type: TmdbCollectionType): DiscoverFilters {
+    return type === 'tv'
+      ? this.normalizeDiscoverFilters(this.globalDiscoverFilters().tv)
+      : this.normalizeDiscoverFilters(this.globalDiscoverFilters().movie);
+  }
+
+  private globalCollectionItemType(type = this.globalCollectionType()): TmdbItemType {
+    return type === 'tv' ? 'tv' : 'movie';
+  }
+
+  private applyGlobalCollectionSettingsToElements(saveHistory = true) {
+    const collectionType = this.globalCollectionType();
+    const endpoint = this.getGlobalCollectionEndpointForType(collectionType);
+    const itemType = this.globalCollectionItemType(collectionType);
+    const itemLimit = this.globalCollectionItemLimit();
+    const slideshowDurationMs = this.globalSlideshowDurationMs();
+    const discoverFilters = this.getGlobalDiscoverFiltersForType(collectionType);
+    const collectionIds: string[] = [];
+
+    this.elements.update(els => els.map(el => {
+      if (!this.isCollectionElement(el)) {
+        return el.type.startsWith('tmdb-') && !el.linkGroup
+          ? { ...el, linkGroup: this.defaultCollectionLinkGroup }
+          : el;
+      }
+      collectionIds.push(el.id);
+      return {
+        ...el,
+        linkGroup: this.defaultCollectionLinkGroup,
+        syncedToElementId: undefined,
+        tmdbCollectionType: collectionType,
+        tmdbItemType: itemType,
+        tmdbEndpoint: endpoint,
+        discoverFilters,
+        collectionItemLimit: itemLimit,
+        slideshowDurationMs: el.type === 'tmdb-backdrop-slideshow' ? slideshowDurationMs : el.slideshowDurationMs,
+        tmdbData: null
+      };
+    }));
+
+    collectionIds.forEach(id => this.fetchTmdbDataForElement(id));
+    if (saveHistory && collectionIds.length > 0) this.saveStateToHistory();
+  }
+
+  updateGlobalCollectionType(value: TmdbCollectionType) {
+    const type = this.normalizeCollectionType(value);
+    this.globalCollectionType.set(type);
+    this.globalCollectionEndpoints.update(endpoints => ({
+      ...endpoints,
+      [type]: this.normalizeCollectionEndpoint(type, endpoints[type])
+    }));
+    this.applyGlobalCollectionSettingsToElements();
+  }
+
+  updateGlobalCollectionEndpoint(value: string) {
+    const type = this.globalCollectionType();
+    this.updateGlobalCollectionEndpointForType(type, value);
+  }
+
+  updateGlobalCollectionEndpointForType(type: TmdbCollectionType, value: string) {
+    this.globalCollectionEndpoints.update(endpoints => ({
+      ...endpoints,
+      [type]: this.normalizeCollectionEndpoint(type, value)
+    }));
+    this.applyGlobalCollectionSettingsToElements();
+  }
+
+  updateGlobalCollectionItemLimit(value: number) {
+    this.globalCollectionItemLimit.set(this.normalizeCollectionItemLimit(value));
+    this.applyGlobalCollectionSettingsToElements();
+  }
+
+  updateGlobalSlideshowDuration(seconds: number) {
+    this.globalSlideshowDurationMs.set(this.normalizeSlideshowDurationMs(Number(seconds) * 1000));
+    this.applyGlobalCollectionSettingsToElements();
+  }
+
+  updateGlobalDiscoverFilter(prop: keyof DiscoverFilters, value: any) {
+    const type = this.globalCollectionType();
+    if (type === 'mixed') return;
+
+    this.globalDiscoverFilters.update(filters => {
+      const current = this.normalizeDiscoverFilters(filters[type]);
+      return {
+        ...filters,
+        [type]: this.normalizeDiscoverFilters({
+          ...current,
+          [prop]: prop === 'year' ? (value ? Number(value) : null) : value
+        })
+      };
+    });
+    this.applyGlobalCollectionSettingsToElements();
+  }
+
+  toggleGlobalDiscoverGenre(genreId: number, checked: boolean) {
+    const type = this.globalCollectionType();
+    if (type === 'mixed') return;
+
+    this.globalDiscoverFilters.update(filters => {
+      const current = this.normalizeDiscoverFilters(filters[type]);
+      const nextGenres = checked
+        ? Array.from(new Set([...current.genres, genreId]))
+        : current.genres.filter(id => id !== genreId);
+      return {
+        ...filters,
+        [type]: {
+          ...current,
+          genres: nextGenres
+        }
+      };
+    });
+    this.applyGlobalCollectionSettingsToElements();
+  }
+
   updateCollectionItemLimit(elementId: string, value: number) {
     const selected = this.elements().find(el => el.id === elementId);
     if (!selected) return;
@@ -2524,9 +2811,25 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   private getLimitedCollectionItemsFromResults(element: CanvasElement, results: any[]): any[] {
     if (!Array.isArray(results) || results.length === 0) return [];
     const limit = this.getEffectiveCollectionItemLimit(element);
-    if (element.type === 'tmdb-backdrop-slideshow') return results.filter((item: any) => item.backdrop_path).slice(0, limit);
-    if (element.type === 'tmdb-poster-scroll') return results.filter((item: any) => item.poster_path).slice(0, limit);
-    return results.slice(0, limit);
+    const source = this.getEffectiveCollectionSourceElement(element);
+    const collectionType = source.tmdbCollectionType || element.tmdbCollectionType;
+    let usableResults = results;
+    if (element.type === 'tmdb-backdrop-slideshow') usableResults = usableResults.filter((item: any) => item.backdrop_path);
+    if (element.type === 'tmdb-poster-scroll') usableResults = usableResults.filter((item: any) => item.poster_path);
+    if (collectionType === 'mixed') usableResults = this.interleaveMixedCollectionItems(usableResults);
+    return usableResults.slice(0, limit);
+  }
+
+  private interleaveMixedCollectionItems(results: any[]): any[] {
+    const movies = results.filter((item: any) => this.resolveItemTypeFromSourceItem(item, 'movie') === 'movie');
+    const shows = results.filter((item: any) => this.resolveItemTypeFromSourceItem(item, 'tv') === 'tv');
+    const interleaved: any[] = [];
+    const max = Math.max(movies.length, shows.length);
+    for (let i = 0; i < max; i++) {
+      if (movies[i]) interleaved.push(movies[i]);
+      if (shows[i]) interleaved.push(shows[i]);
+    }
+    return interleaved;
   }
 
   private getCurrentTmdbSourceItem(elementId: string, element: CanvasElement): any | null {
@@ -2541,6 +2844,8 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   private resolveItemTypeFromSourceItem(item: any, fallback?: TmdbCollectionType | TmdbItemType): TmdbItemType {
     const mediaType = item?.media_type;
     if (mediaType === 'movie' || mediaType === 'tv' || mediaType === 'person') return mediaType;
+    if (item?.first_air_date && !item?.release_date) return 'tv';
+    if (item?.release_date && !item?.first_air_date) return 'movie';
     if (fallback === 'tv' || fallback === 'person') return fallback;
     return 'movie';
   }
@@ -2856,6 +3161,53 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
         params.append('append_to_response', append);
         obs = this.http.get(`https://api.themoviedb.org/3/${element.tmdbItemType}/${element.tmdbId}?${params.toString()}`, { headers });
+    } else if (this.isCollectionElement(element) && element.tmdbCollectionType === 'mixed') {
+        const itemLimit = this.getEffectiveCollectionItemLimit(element);
+        const pageCount = Math.ceil(itemLimit / 20);
+        const fetchCollectionEndpoint = (endpoint: string, collectionType: 'movie' | 'tv') => {
+          const endpointFilters = this.getGlobalDiscoverFiltersForType(collectionType);
+          const buildCollectionUrl = (page: number) => {
+            const pageParams = new URLSearchParams(params.toString());
+            if (endpoint.startsWith('discover')) {
+              pageParams.append('sort_by', endpointFilters.sortBy);
+              if (endpointFilters.genres.length > 0) pageParams.append('with_genres', endpointFilters.genres.join(','));
+              const yearKey = collectionType === 'movie' ? 'primary_release_year' : 'first_air_date_year';
+              if (endpointFilters.year) pageParams.append(yearKey, endpointFilters.year.toString());
+            }
+            pageParams.append('watch_region', this.watchRegion());
+            pageParams.set('page', page.toString());
+            return `https://api.themoviedb.org/3/${endpoint}?${pageParams.toString()}`;
+          };
+
+          const requests = Array.from({ length: pageCount }, (_, index) => this.http.get<any>(buildCollectionUrl(index + 1), { headers }));
+          return (requests.length > 1 ? forkJoin(requests) : requests[0].pipe(map(response => [response]))).pipe(
+            map(responses => {
+              const first = responses[0] || {};
+              return {
+                ...first,
+                results: responses
+                  .flatMap(response => Array.isArray(response?.results) ? response.results : [])
+                  .slice(0, itemLimit)
+                  .map((item: any) => ({ ...item, media_type: collectionType }))
+              };
+            })
+          );
+        };
+
+        obs = forkJoin([
+          fetchCollectionEndpoint(this.getGlobalCollectionEndpointForType('movie'), 'movie'),
+          fetchCollectionEndpoint(this.getGlobalCollectionEndpointForType('tv'), 'tv')
+        ]).pipe(
+          map(([movieData, tvData]) => ({
+            ...(movieData || tvData || {}),
+            results: this.interleaveMixedCollectionItems([
+              ...(Array.isArray(movieData?.results) ? movieData.results : []),
+              ...(Array.isArray(tvData?.results) ? tvData.results : [])
+            ]),
+            __collectionType: 'mixed'
+          })),
+          switchMap(data => this.enrichCollectionDataForLinkedScene(element, data, headers))
+        );
     } else if (element.tmdbEndpoint) {
         if (element.tmdbEndpoint.startsWith('discover')) {
           params.append('sort_by', element.discoverFilters.sortBy);
@@ -3472,6 +3824,19 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
           tmdbId: String(sourceEl.tmdbId),
           ttl: 21600
         };
+      } else if (this.isCollectionElement(sourceEl) && sourceEl.tmdbCollectionType === 'mixed') {
+        source = {
+          kind: 'collection',
+          collectionType: 'mixed',
+          movieEndpoint: this.getGlobalCollectionEndpointForType('movie'),
+          tvEndpoint: this.getGlobalCollectionEndpointForType('tv'),
+          movieDiscoverFilters: this.normalizeExportDiscoverFilters(this.globalDiscoverFilters().movie),
+          tvDiscoverFilters: this.normalizeExportDiscoverFilters(this.globalDiscoverFilters().tv),
+          limit: this.isCollectionElement(el) ? this.getEffectiveCollectionItemLimit(el, elements) : 1,
+          enrichLinked: !!sourceEl.linkGroup && linkedCollectionGroups.has(sourceEl.linkGroup),
+          enrichFirst: false,
+          ttl: 900
+        };
       } else if (sourceEl.tmdbEndpoint) {
         source = {
           kind: 'collection',
@@ -3578,7 +3943,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
     function detailKey(item, fallbackType) {
         if (!item || !item.id) return '';
-        const type = item.media_type || fallbackType || (item.first_air_date ? 'tv' : 'movie');
+        const type = item.media_type || (item.first_air_date && !item.release_date ? 'tv' : (item.release_date && !item.first_air_date ? 'movie' : (fallbackType === 'tv' ? 'tv' : 'movie')));
         return type + ':' + item.id;
     }
 
@@ -4205,33 +4570,93 @@ function tmdb_http_get_json($url, $config) {
     return is_array($json) ? $json : null;
 }
 
+function tmdb_item_type($item, $fallback = 'movie') {
+    if (!is_array($item)) return $fallback === 'tv' ? 'tv' : 'movie';
+    $mediaType = $item['media_type'] ?? '';
+    if ($mediaType === 'movie' || $mediaType === 'tv') return $mediaType;
+    if (!empty($item['first_air_date']) && empty($item['release_date'])) return 'tv';
+    if (!empty($item['release_date']) && empty($item['first_air_date'])) return 'movie';
+    return $fallback === 'tv' ? 'tv' : 'movie';
+}
+
+function tmdb_interleave_mixed_results($results) {
+    if (!is_array($results)) return array();
+    $movies = array_values(array_filter($results, function($item) {
+        return tmdb_item_type($item, 'movie') === 'movie';
+    }));
+    $shows = array_values(array_filter($results, function($item) {
+        return tmdb_item_type($item, 'tv') === 'tv';
+    }));
+    $interleaved = array();
+    $max = max(count($movies), count($shows));
+    for ($i = 0; $i < $max; $i++) {
+        if (isset($movies[$i])) $interleaved[] = $movies[$i];
+        if (isset($shows[$i])) $interleaved[] = $shows[$i];
+    }
+    return $interleaved;
+}
+
+function tmdb_tag_results($results, $type) {
+    if (!is_array($results)) return array();
+    return array_map(function($item) use ($type) {
+        if (is_array($item)) $item['media_type'] = $type;
+        return $item;
+    }, $results);
+}
+
+function tmdb_fetch_collection_pages($source, $config, $limit) {
+    $pageCount = max(1, intval(ceil($limit / 20)));
+    $data = null;
+    $combinedResults = array();
+
+    for ($page = 1; $page <= $pageCount; $page++) {
+        $pageData = tmdb_http_get_json(tmdb_build_url($source, $config, $page), $config);
+        if (!$pageData) {
+            if ($page === 1) return array(null, array());
+            break;
+        }
+        if ($data === null) $data = $pageData;
+        if (!empty($pageData['results']) && is_array($pageData['results'])) {
+            $combinedResults = array_merge($combinedResults, $pageData['results']);
+        }
+    }
+
+    return array($data, $combinedResults);
+}
+
 function tmdb_fetch_source($source, $config) {
     if (($source['kind'] ?? '') === 'collection') {
         $limit = max(1, min(40, intval($source['limit'] ?? 20)));
-        $pageCount = max(1, intval(ceil($limit / 20)));
-        $data = null;
-        $combinedResults = array();
-
-        for ($page = 1; $page <= $pageCount; $page++) {
-            $pageData = tmdb_http_get_json(tmdb_build_url($source, $config, $page), $config);
-            if (!$pageData) {
-                if ($page === 1) return null;
-                break;
-            }
-            if ($data === null) $data = $pageData;
-            if (!empty($pageData['results']) && is_array($pageData['results'])) {
-                $combinedResults = array_merge($combinedResults, $pageData['results']);
-            }
+        if (($source['collectionType'] ?? 'movie') === 'mixed') {
+            $movieSource = array_merge($source, array(
+                'endpoint' => $source['movieEndpoint'] ?? 'movie/popular',
+                'collectionType' => 'movie',
+                'discoverFilters' => $source['movieDiscoverFilters'] ?? array()
+            ));
+            $tvSource = array_merge($source, array(
+                'endpoint' => $source['tvEndpoint'] ?? 'tv/popular',
+                'collectionType' => 'tv',
+                'discoverFilters' => $source['tvDiscoverFilters'] ?? array()
+            ));
+            list($movieData, $movieResults) = tmdb_fetch_collection_pages($movieSource, $config, $limit);
+            list($tvData, $tvResults) = tmdb_fetch_collection_pages($tvSource, $config, $limit);
+            if (!$movieData && !$tvData) return null;
+            $data = $movieData ?: $tvData;
+            $combinedResults = tmdb_interleave_mixed_results(array_merge(
+                tmdb_tag_results($movieResults, 'movie'),
+                tmdb_tag_results($tvResults, 'tv')
+            ));
+        } else {
+            list($data, $combinedResults) = tmdb_fetch_collection_pages($source, $config, $limit);
+            if (!$data) return null;
         }
-
-        if (!$data) return null;
         $data['results'] = array_slice($combinedResults, 0, $limit);
         $data['__collectionType'] = $source['collectionType'] ?? 'movie';
         if ((!empty($source['enrichLinked']) || !empty($source['enrichFirst'])) && !empty($data['results']) && is_array($data['results'])) {
             $details = array();
             foreach (array_slice($data['results'], 0, $limit) as $item) {
                 if (empty($item['id'])) continue;
-                $type = $item['media_type'] ?? ($source['collectionType'] ?? 'movie');
+                $type = tmdb_item_type($item, $source['collectionType'] ?? 'movie');
                 if (!in_array($type, array('movie', 'tv'), true)) continue;
                 $detailSource = array('kind' => 'detail', 'itemType' => $type, 'tmdbId' => (string)$item['id']);
                 $detail = tmdb_http_get_json(tmdb_build_url($detailSource, $config), $config);
