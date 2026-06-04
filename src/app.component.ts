@@ -37,6 +37,7 @@ type StrokePosition = 'inside' | 'outside';
 type RelativeSide = 'right' | 'left' | 'top' | 'bottom' | 'center';
 type TransitionEffect = 'none' | 'fade' | 'slide-left' | 'slide-right' | 'slide-up' | 'slide-down' | 'zoom' | 'blur' | 'flip' | 'bounce';
 type SlideshowState = {idx1: number, idx2: number, fade: boolean, resetting?: boolean, sceneFade: boolean, backdrops: string[], items: any[]};
+type DynamicBackdropTransitionState = { currentUrl: string; underlayUrl: string; fade: boolean; resetting?: boolean; version: number };
 type TmdbDetailEntry = { key: string; altKey: string; detail: any };
 
 interface CanvasResolutionPreset {
@@ -144,8 +145,18 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   private http = inject(HttpClient);
   private cdr = inject(ChangeDetectorRef);
   private slideshowIntervals: Map<string, any> = new Map();
+  private slideshowTransitionTimeouts: Map<string, any> = new Map();
   private slideshowImagePreloads: Map<string, Promise<void>> = new Map();
+  private slideshowRunTokens: Map<string, number> = new Map();
+  private slideshowNextSchedulers: Map<string, () => void> = new Map();
+  private transitionPreviewTimeouts: Map<string, any> = new Map();
+  private dynamicBackdropTransitionTimeouts: Map<string, any> = new Map();
   private posterScrollIntervals: Map<string, any> = new Map();
+  private globalSlideshowInterval: any = null;
+  private globalSlideshowIndex = 0;
+  private globalSlideshowFetchSequence = 0;
+  private globalSlideshowRunToken = 0;
+  private globalSlideshowApplySequence = 0;
   private searchTerms = new Subject<string>();
   private authCheckSubject = new Subject<void>();
   private destroy$ = new Subject<void>();
@@ -209,7 +220,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     { value: 'flip', label: 'Flip' },
     { value: 'bounce', label: 'Bounce' }
   ];
-  readonly transitionDurationOptions = [150, 250, 350, 500, 750, 1000, 1500];
+  readonly transitionDurationOptions = [150, 250, 350, 500, 750, 1000, 1500, 2000, 3000, 5000];
   readonly transitionDelayOptions = [0, 100, 250, 500, 1000, 2000];
   readonly castBubbleSizeOptions = [32, 40, 48, 56, 64, 80, 96, 120];
   readonly castCountOptions = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 30];
@@ -318,8 +329,9 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   copiedStyles = signal<Partial<CanvasElement['styles']> | null>(null);
 
   slideshowState = signal<{[id: string]: SlideshowState}>({});
+  globalSlideshowData = signal<any | null>(null);
   transitionVersions = signal<{[id: string]: number}>({});
-
+  dynamicBackdropTransitions = signal<{[id: string]: DynamicBackdropTransitionState}>({});
   draggedLayerId = signal<string | null>(null);
   dragOverLayerId = signal<string | null>(null);
 
@@ -356,6 +368,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     return JSON.stringify(
       elements
       .filter(el => el.type.startsWith('tmdb-'))
+      .filter(el => !this.isGlobalSlideshowTarget(el, elements))
       .filter(el => this.isCollectionElement(el) || !this.getCollectionMasterForElement(el, elements))
       .map(el => ({
         id: el.id,
@@ -369,6 +382,26 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       linkGroup: el.linkGroup || ''
       }))
     );
+  });
+
+  private globalSlideshowFetchKey = computed(() => {
+    const elements = this.elements();
+    const targets = elements
+      .filter(el => this.isGlobalSlideshowTarget(el, elements))
+      .map(el => ({ id: el.id, type: el.type, linkGroup: el.linkGroup || '' }));
+
+    if (targets.length === 0) return '';
+
+    const collectionType = this.globalCollectionType();
+    return JSON.stringify({
+      targets,
+      collectionType,
+      endpoint: this.getGlobalCollectionEndpointForType(collectionType),
+      movieEndpoint: this.getGlobalCollectionEndpointForType('movie'),
+      tvEndpoint: this.getGlobalCollectionEndpointForType('tv'),
+      itemLimit: this.globalCollectionItemLimit(),
+      discoverFilters: this.globalDiscoverFilters()
+    });
   });
 
   availableCollectionEndpoints = computed(() => {
@@ -802,27 +835,268 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   getElementAnimation(element: CanvasElement): string | null {
     const version = this.transitionVersions()[element.id] || 0;
+    if (!this.previewMode() && version === 0) return null;
     return this.getTransitionAnimationCss(element, this.elements(), version % 2 === 1);
   }
 
-  private triggerElementTransitions(elementIds: string[]) {
-    if (!this.previewMode()) return;
-    const allElements = this.elements();
+  getBackdropSlideshowStateForElement(element: CanvasElement, elements = this.elements()): SlideshowState | null {
+    const master = this.getBackdropSlideshowMasterForElement(element, elements);
+    if (!master || master.id === element.id) return null;
+    const state = this.slideshowState()[master.id];
+    return state?.backdrops?.length ? state : null;
+  }
+
+  getDynamicBackdropTransitionState(element: CanvasElement): DynamicBackdropTransitionState | null {
+    if (element.type !== 'tmdb-backdrop') return null;
+    if (this.getBackdropSlideshowStateForElement(element)) return null;
+    return this.dynamicBackdropTransitions()[element.id] || null;
+  }
+
+  getBackdropFrameBackgroundSize(element: CanvasElement): string {
+    if (element.imageFit === 'contain') return 'contain';
+    if (element.imageFit === 'fill') return '100% 100%';
+    return 'cover';
+  }
+
+  getBackdropUrlBackgroundImage(url: string | undefined): string {
+    return url ? `url(${url})` : 'none';
+  }
+
+  getSlideshowFrameBackgroundImage(state: SlideshowState, layer: 'current' | 'underlay'): string {
+    const fallback = state.backdrops[state.idx1] || state.backdrops[0] || '';
+    const index = layer === 'current' ? state.idx1 : (state.resetting ? state.idx1 : state.idx2);
+    const url = state.backdrops[index] || fallback;
+    return url ? `url(${url})` : 'none';
+  }
+
+  private getBackdropSlideshowMasterForElement(element: CanvasElement, elements = this.elements()): CanvasElement | null {
+    if (element.type === 'tmdb-backdrop-slideshow') return element;
+    if (element.type !== 'tmdb-backdrop') return null;
+    const master = this.getCollectionMasterForElement(element, elements);
+    return master?.type === 'tmdb-backdrop-slideshow' ? master : null;
+  }
+
+  private getBackdropSlideshowFrameConsumers(master: CanvasElement, elements = this.elements()): CanvasElement[] {
+    return elements.filter(el => el.id === master.id || this.getBackdropSlideshowMasterForElement(el, elements)?.id === master.id);
+  }
+
+  private getBackdropSlideshowRuntimeTransitionMs(master: CanvasElement, elements = this.elements()): number {
+    return this.getBackdropSlideshowFrameConsumers(master, elements).reduce((maxDuration, el) => {
+      return this.isSlideshowTransitionEnabled(el, elements)
+        ? Math.max(maxDuration, this.getEffectiveTransitionDelayMs(el, elements) + this.getEffectiveTransitionDurationMs(el, elements))
+        : maxDuration;
+    }, 0);
+  }
+
+  private shouldAnimateElementInEditor(element: CanvasElement): boolean {
+    if (element.type === 'tmdb-backdrop-slideshow') return false;
+    if (this.getBackdropSlideshowStateForElement(element)) return false;
+    if (this.getDynamicBackdropTransitionState(element)) return false;
+    if (this.getEffectiveTransitionEffect(element) === 'none') return false;
+    const version = this.transitionVersions()[element.id] || 0;
+    return this.previewMode() || version > 0;
+  }
+
+  getElementTransitionClassMap(element: CanvasElement): Record<string, boolean> {
+    if (!this.shouldAnimateElementInEditor(element)) return {};
+    const effect = this.getEffectiveTransitionEffect(element);
+    const alternate = (this.transitionVersions()[element.id] || 0) % 2 === 1;
+    return {
+      'tmdb-transition-active': true,
+      [`tmdb-transition-${effect}`]: !alternate,
+      [`tmdb-transition-${effect}-alt`]: alternate
+    };
+  }
+
+  getElementTransitionDurationStyle(element: CanvasElement): string {
+    return this.shouldAnimateElementInEditor(element)
+      ? `${this.getEffectiveTransitionDurationMs(element)}ms`
+      : '';
+  }
+
+  getElementTransitionDelayStyle(element: CanvasElement): string {
+    return this.shouldAnimateElementInEditor(element)
+      ? `${this.getEffectiveTransitionDelayMs(element)}ms`
+      : '';
+  }
+
+  getElementTransitionTimingFunction(element: CanvasElement): string {
+    return this.shouldAnimateElementInEditor(element)
+      ? 'cubic-bezier(0.22, 1, 0.36, 1)'
+      : '';
+  }
+
+  getElementTransitionFillMode(element: CanvasElement): string {
+    return this.shouldAnimateElementInEditor(element) ? 'both' : '';
+  }
+
+  private getExpandedTransitionTargetIds(elementIds: string[], elements = this.elements()): string[] {
     const idsToTrigger = new Set(elementIds);
     elementIds.forEach(id => {
-      const element = allElements.find(el => el.id === id);
+      const element = elements.find(el => el.id === id);
       if (!element?.layoutGroupId) return;
-      allElements
+      const background = this.getLayoutGroupBackground(element, elements);
+      if (!background?.groupTransitionEnabled) return;
+      elements
         .filter(el => el.layoutGroupId === element.layoutGroupId)
         .forEach(el => idsToTrigger.add(el.id));
     });
-    const ids = Array.from(idsToTrigger);
+    return Array.from(idsToTrigger);
+  }
+
+  private triggerElementTransitions(elementIds: string[]) {
+    const allElements = this.elements();
+    const ids = this.getExpandedTransitionTargetIds(elementIds, allElements);
     if (ids.length === 0) return;
     this.transitionVersions.update(versions => {
       const next = { ...versions };
       ids.forEach(id => next[id] = (next[id] || 0) + 1);
       return next;
     });
+    this.scheduleElementTransitionPreviewCleanup(ids);
+  }
+
+  private clearElementTransitionPreviewTimeout(elementId: string) {
+    const timeout = this.transitionPreviewTimeouts.get(elementId);
+    if (!timeout) return;
+    clearTimeout(timeout);
+    this.transitionPreviewTimeouts.delete(elementId);
+  }
+
+  private clearElementTransitionPreviews(elementId?: string) {
+    if (elementId) {
+      this.clearElementTransitionPreviewTimeout(elementId);
+      this.transitionVersions.update(versions => {
+        if (!versions[elementId]) return versions;
+        const { [elementId]: _removed, ...rest } = versions;
+        return rest;
+      });
+      return;
+    }
+
+    this.transitionPreviewTimeouts.forEach(timeout => clearTimeout(timeout));
+    this.transitionPreviewTimeouts.clear();
+    this.transitionVersions.set({});
+  }
+
+  private scheduleElementTransitionPreviewCleanup(elementIds: string[]) {
+    const elements = this.elements();
+    elementIds.forEach(id => {
+      const version = this.transitionVersions()[id] || 0;
+      if (version === 0) return;
+
+      this.clearElementTransitionPreviewTimeout(id);
+      const element = elements.find(el => el.id === id);
+      const transitionMs = element
+        ? this.getEffectiveTransitionDelayMs(element, elements) + this.getEffectiveTransitionDurationMs(element, elements)
+        : 500;
+
+      const timeout = setTimeout(() => {
+        this.transitionPreviewTimeouts.delete(id);
+        this.transitionVersions.update(versions => {
+          if (versions[id] !== version) return versions;
+          const { [id]: _removed, ...rest } = versions;
+          return rest;
+        });
+        this.cdr.detectChanges();
+      }, Math.max(0, transitionMs) + 80);
+
+      this.transitionPreviewTimeouts.set(id, timeout);
+    });
+  }
+
+  private createSlideshowRunToken(elementId: string): number {
+    const token = (this.slideshowRunTokens.get(elementId) || 0) + 1;
+    this.slideshowRunTokens.set(elementId, token);
+    return token;
+  }
+
+  private isCurrentSlideshowRun(elementId: string, runToken?: number): boolean {
+    return runToken === undefined || this.slideshowRunTokens.get(elementId) === runToken;
+  }
+
+  private clearSlideshowTimeout(map: Map<string, any>, elementId: string) {
+    const timeout = map.get(elementId);
+    if (!timeout) return;
+    clearTimeout(timeout);
+    map.delete(elementId);
+  }
+
+  private scheduleSlideshowCompletion(elementId: string, delayMs: number, runToken: number | undefined, onComplete?: () => void) {
+    this.clearSlideshowTimeout(this.slideshowTransitionTimeouts, elementId);
+    const timeout = setTimeout(() => {
+      this.slideshowTransitionTimeouts.delete(elementId);
+      if (!this.isCurrentSlideshowRun(elementId, runToken)) return;
+      this.completeSlideshowTransition(elementId, runToken);
+      onComplete?.();
+    }, Math.max(0, delayMs));
+    this.slideshowTransitionTimeouts.set(elementId, timeout);
+  }
+
+  private completeSlideshowTransition(elementId: string, runToken?: number) {
+    if (!this.isCurrentSlideshowRun(elementId, runToken)) return;
+    let nextPreloadUrl: string | undefined;
+    this.slideshowState.update(s => {
+      const current = s[elementId];
+      if (!current) return s;
+      const nextNextIdx = (current.idx2 + 1) % current.backdrops.length;
+      nextPreloadUrl = current.backdrops[nextNextIdx];
+      return {
+        ...s,
+        [elementId]: {
+          ...current,
+          idx1: current.idx2,
+          idx2: nextNextIdx,
+          fade: false,
+          resetting: true,
+          sceneFade: false
+        }
+      };
+    });
+    void this.preloadSlideshowImage(nextPreloadUrl);
+    this.cdr.detectChanges();
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!this.isCurrentSlideshowRun(elementId, runToken)) return;
+        this.slideshowState.update(s => {
+          const current = s[elementId];
+          return current ? { ...s, [elementId]: { ...current, resetting: false } } : s;
+        });
+        this.cdr.detectChanges();
+      });
+    });
+  }
+
+  private previewSlideshowTransition(elementId: string): boolean {
+    const element = this.elements().find(e => e.id === elementId);
+    const state = this.slideshowState()[elementId];
+    if (!element || element.type !== 'tmdb-backdrop-slideshow' || !state || state.backdrops.length < 2) return false;
+    if (state.fade || state.resetting || !this.isSlideshowTransitionEnabled(element)) return false;
+
+    const runToken = this.slideshowRunTokens.get(elementId);
+    const transitionMs = this.getBackdropSlideshowRuntimeTransitionMs(element);
+    if (transitionMs <= 0) return false;
+    void this.preloadSlideshowImage(state.backdrops[state.idx2]).then(() => {
+      if (!this.isCurrentSlideshowRun(elementId, runToken)) return;
+      const latestEl = this.elements().find(e => e.id === elementId);
+      const latestState = this.slideshowState()[elementId];
+      if (!latestEl || !latestState || latestState.fade || latestState.resetting || this.getBackdropSlideshowRuntimeTransitionMs(latestEl) <= 0) return;
+
+      const nextItem = latestState.items[latestState.idx2];
+      if (nextItem) this.propagateSourceItemToLinkedGroup(elementId, latestEl, nextItem, true);
+
+      this.clearSlideshowTimeout(this.slideshowIntervals, elementId);
+      this.slideshowState.update(s => {
+        const current = s[elementId];
+        return current ? { ...s, [elementId]: { ...current, fade: true, resetting: false, sceneFade: false } } : s;
+      });
+      this.cdr.detectChanges();
+
+      this.scheduleSlideshowCompletion(elementId, transitionMs + 50, runToken, () => this.slideshowNextSchedulers.get(elementId)?.());
+    });
+
+    return true;
   }
 
   isSlideshowTransitionEnabled(element: CanvasElement, elements = this.elements()): boolean {
@@ -837,16 +1111,25 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   getSlideshowFrameTransition(element: CanvasElement): string {
     if (!this.isSlideshowTransitionEnabled(element)) return 'none';
     const duration = this.getEffectiveTransitionDurationMs(element);
+    const delay = this.getEffectiveTransitionDelayMs(element);
     return [
-      `opacity ${duration}ms ease-in-out`,
-      `transform ${duration}ms cubic-bezier(0.22, 1, 0.36, 1)`,
-      `filter ${duration}ms ease-in-out`
+      `opacity ${duration}ms ease-in-out ${delay}ms`,
+      `transform ${duration}ms cubic-bezier(0.22, 1, 0.36, 1) ${delay}ms`,
+      `filter ${duration}ms ease-in-out ${delay}ms`
     ].join(', ');
   }
 
   getSlideshowCurrentFrameOpacity(element: CanvasElement, transitioning: boolean): number {
     if (!transitioning || !this.isSlideshowTransitionEnabled(element)) return 1;
     const effect = this.getEffectiveTransitionEffect(element);
+    return ['slide-left', 'slide-right', 'slide-up', 'slide-down'].includes(effect) ? 1 : 0;
+  }
+
+  getSlideshowUnderlayFrameOpacity(element: CanvasElement, state: Pick<SlideshowState, 'fade' | 'resetting'>): number {
+    if (state.resetting) return 1;
+    if (!this.isSlideshowTransitionEnabled(element)) return 1;
+    const effect = this.getEffectiveTransitionEffect(element);
+    if (state.fade) return 1;
     return ['slide-left', 'slide-right', 'slide-up', 'slide-down'].includes(effect) ? 1 : 0;
   }
 
@@ -864,8 +1147,40 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
+  getSlideshowUnderlayFrameTransform(element: CanvasElement, state: Pick<SlideshowState, 'fade' | 'resetting'>): string {
+    if (state.resetting || !this.isSlideshowTransitionEnabled(element)) return 'none';
+    if (state.fade) return 'none';
+    switch (this.getEffectiveTransitionEffect(element)) {
+      case 'slide-left': return 'translateX(100%)';
+      case 'slide-right': return 'translateX(-100%)';
+      case 'slide-up': return 'translateY(100%)';
+      case 'slide-down': return 'translateY(-100%)';
+      case 'zoom': return 'scale(0.94)';
+      case 'flip': return 'perspective(800px) rotateY(-14deg)';
+      case 'bounce': return 'scale(1.04)';
+      default: return 'none';
+    }
+  }
+
   getSlideshowCurrentFrameFilter(element: CanvasElement, transitioning: boolean): string {
     return transitioning && this.getEffectiveTransitionEffect(element) === 'blur' ? 'blur(12px)' : 'none';
+  }
+
+  getSlideshowUnderlayFrameFilter(element: CanvasElement, state: Pick<SlideshowState, 'fade' | 'resetting'>): string {
+    return !state.resetting && !state.fade && this.getEffectiveTransitionEffect(element) === 'blur' ? 'blur(12px)' : 'none';
+  }
+
+  getTransitionTimingWarning(element: CanvasElement): string | null {
+    if (this.getEffectiveTransitionEffect(element) === 'none') return null;
+    const master = this.getSlideshowMasterForElement(element);
+    if (!master) return null;
+
+    const slideshowMs = this.getEffectiveSlideshowDurationMs(master);
+    const transitionMs = this.getEffectiveTransitionDurationMs(element);
+    const totalMs = transitionMs + this.getEffectiveTransitionDelayMs(element);
+    if (transitionMs > slideshowMs) return 'Transition duration is longer than the slide duration.';
+    if (totalMs > slideshowMs) return 'Delay plus duration exceeds the slide duration.';
+    return null;
   }
 
   isGroupTransitionEnabled(element: CanvasElement): boolean {
@@ -1040,6 +1355,17 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.isCollectionElementType(element.type);
   }
 
+  private isGlobalSlideshowTarget(element: CanvasElement, elements = this.elements()): boolean {
+    return element.type.startsWith('tmdb-') &&
+      !this.isCollectionElement(element) &&
+      element.linkGroup === this.defaultCollectionLinkGroup &&
+      !this.getCollectionMasterForElement(element, elements);
+  }
+
+  private hasGlobalSlideshowTargets(elements = this.elements()): boolean {
+    return elements.some(el => this.isGlobalSlideshowTarget(el, elements));
+  }
+
   private normalizeCollectionItemLimit(value: any): number {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return this.defaultCollectionItemLimit;
@@ -1191,6 +1517,24 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         });
     }, { allowSignalWrites: true });
 
+    effect(() => {
+        const dataKey = this.globalSlideshowFetchKey();
+        const authReady = this.isApiConfigured() && this.isAuthValid();
+        this.language();
+        this.watchRegion();
+        this.includeAdult();
+
+        if (!authReady || !dataKey) {
+          untracked(() => this.clearGlobalSlideshowRuntime());
+          return;
+        }
+
+        untracked(() => {
+          this.fetchTmdbGenres();
+          this.fetchGlobalSlideshowData();
+        });
+    }, { allowSignalWrites: true });
+
     effect(() => this.updatePhpCode());
     effect(() => this.saveProjectToLocalStorage());
 
@@ -1242,6 +1586,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   ngOnDestroy() {
       this.destroy$.next();
       this.destroy$.complete();
+      this.clearElementTransitionPreviews();
       this.clearCollectionRuntime();
   }
 
@@ -1721,8 +2066,12 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     };
 
     if (elementId) {
-      clearFromMap(this.slideshowIntervals, elementId);
+      this.clearSlideshowTimeout(this.slideshowIntervals, elementId);
+      this.clearSlideshowTimeout(this.slideshowTransitionTimeouts, elementId);
+      this.slideshowNextSchedulers.delete(elementId);
+      this.clearDynamicBackdropTransitions(elementId);
       clearFromMap(this.posterScrollIntervals, elementId);
+      this.createSlideshowRunToken(elementId);
       this.slideshowState.update(state => {
         if (!state[elementId]) return state;
         const { [elementId]: _removed, ...rest } = state;
@@ -1731,11 +2080,28 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
-    this.slideshowIntervals.forEach(interval => clearInterval(interval));
+    this.clearGlobalSlideshowRuntime();
+    this.slideshowIntervals.forEach(interval => clearTimeout(interval));
+    this.slideshowTransitionTimeouts.forEach(timeout => clearTimeout(timeout));
     this.posterScrollIntervals.forEach(interval => clearInterval(interval));
     this.slideshowIntervals.clear();
+    this.slideshowTransitionTimeouts.clear();
+    this.slideshowNextSchedulers.clear();
     this.posterScrollIntervals.clear();
+    this.slideshowRunTokens.clear();
     this.slideshowState.set({});
+  }
+
+  private clearGlobalSlideshowRuntime(clearData = true) {
+    if (this.globalSlideshowInterval) {
+      clearInterval(this.globalSlideshowInterval);
+      this.globalSlideshowInterval = null;
+    }
+    this.clearDynamicBackdropTransitions();
+    this.globalSlideshowRunToken++;
+    this.globalSlideshowApplySequence++;
+    this.globalSlideshowIndex = 0;
+    if (clearData) this.globalSlideshowData.set(null);
   }
 
   // --- ELEMENT MANIPULATION ---
@@ -1747,7 +2113,8 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       [type]: this.normalizeCollectionEndpoint(type, endpoints[type])
     }));
     this.applyGlobalCollectionSettingsToElements(false);
-    this.addElement('tmdb-backdrop-slideshow', this.globalCollectionItemType(type), type);
+    this.fetchGlobalSlideshowData();
+    this.saveStateToHistory();
   }
 
   addElement(type: ElementType, itemType: TmdbItemType = 'movie', collectionType?: TmdbCollectionType) {
@@ -1856,10 +2223,11 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     const remainingSelection = this.selectedElementIds().filter(selectedId => selectedId !== id);
     this.selectedElementIds.set(remainingSelection);
     if (this.selectedElementId() === id) this.selectedElementId.set(remainingSelection[remainingSelection.length - 1] || null);
-    if (remainingSelection.length === 0) this.multiSelectMode.set(false);
-    this.clearCollectionRuntime(id);
-    this.saveStateToHistory();
-  }
+	    if (remainingSelection.length === 0) this.multiSelectMode.set(false);
+	    this.clearElementTransitionPreviews(id);
+	    this.clearCollectionRuntime(id);
+	    this.saveStateToHistory();
+	  }
 
   deleteSelectedElements() {
     const ids = this.selectedElementIds();
@@ -1870,7 +2238,10 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         .filter(el => idSet.has(el.id) && el.layoutGroupRole === 'background' && !!el.layoutGroupId)
         .map(el => el.layoutGroupId!)
     );
-    ids.forEach(id => this.clearCollectionRuntime(id));
+	    ids.forEach(id => {
+	      this.clearElementTransitionPreviews(id);
+	      this.clearCollectionRuntime(id);
+	    });
     this.elements.update(els => this.applyRelativeLayoutToElements(els
       .filter(el => !idSet.has(el.id))
       .map(el => {
@@ -2140,6 +2511,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   updateElementProperty(prop: keyof CanvasElement, value: any, noHistory = false) {
       const selected = this.selectedElement();
+      const selectedId = selected?.id;
       if (selected && (prop === 'x' || prop === 'y') && this.getLayoutGroupLockState(selected)) {
         const nextValue = this.maybeSnapValue(selected, Number(value));
         const currentValue = Number(selected[prop]) || 0;
@@ -2197,6 +2569,10 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
           el.tmdbData = null;
         }
       }, noHistory);
+
+      if (selectedId && ['content', 'dataPath', 'dataPrefix', 'dataSuffix'].includes(String(prop))) {
+        this.triggerElementTransitions([selectedId]);
+      }
 
       if (prop === 'tmdbId') {
          const el = this.selectedElement();
@@ -2571,6 +2947,13 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       return { ...el, [prop]: nextValue };
     }));
     this.saveStateToHistory();
+
+    const latestElements = this.elements();
+    const latestTarget = latestElements.find(el => el.id === targetId);
+    if (latestTarget?.type === 'tmdb-backdrop-slideshow' && this.previewSlideshowTransition(latestTarget.id)) return;
+    const backdropMaster = latestTarget ? this.getBackdropSlideshowMasterForElement(latestTarget, latestElements) : null;
+    if (backdropMaster && this.previewSlideshowTransition(backdropMaster.id)) return;
+    this.triggerElementTransitions([targetId]);
   }
 
   private getGlobalDiscoverFiltersForType(type: TmdbCollectionType): DiscoverFilters {
@@ -2614,7 +2997,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     }));
 
     collectionIds.forEach(id => this.fetchTmdbDataForElement(id));
-    if (saveHistory && collectionIds.length > 0) this.saveStateToHistory();
+    if (saveHistory && (collectionIds.length > 0 || this.hasGlobalSlideshowTargets())) this.saveStateToHistory();
   }
 
   updateGlobalCollectionType(value: TmdbCollectionType) {
@@ -2648,6 +3031,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   updateGlobalSlideshowDuration(seconds: number) {
     this.globalSlideshowDurationMs.set(this.normalizeSlideshowDurationMs(Number(seconds) * 1000));
     this.applyGlobalCollectionSettingsToElements();
+    this.setupGlobalSlideshowRuntime();
   }
 
   updateGlobalDiscoverFilter(prop: keyof DiscoverFilters, value: any) {
@@ -2874,7 +3258,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     };
   }
 
-  private propagateSourceItemToLinkedGroup(sourceElementId: string, sourceEl: CanvasElement, item: any) {
+  private propagateSourceItemToLinkedGroup(sourceElementId: string, sourceEl: CanvasElement, item: any, animateTargets = false) {
     if (!sourceEl.linkGroup || !item?.id) return;
     const itemType = this.resolveItemTypeFromSourceItem(item, sourceEl.tmdbCollectionType || sourceEl.tmdbItemType);
     const detail = this.getCollectionItemDetail(sourceEl, item);
@@ -2889,16 +3273,20 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       !!detail.genres
     );
 
-    this.elements.update(els => els.map(el => {
-      if (el.linkGroup !== sourceEl.linkGroup || el.id === sourceElementId || this.isCollectionElement(el)) return el;
-      return {
-        ...el,
-        tmdbId: String(item.id),
-        tmdbItemType: itemType,
-        tmdbData: detail || item
-      };
-    }));
-    this.triggerElementTransitions(transitionTargetIds);
+    const applyUpdate = () => {
+      this.elements.update(els => els.map(el => {
+        if (el.linkGroup !== sourceEl.linkGroup || el.id === sourceElementId || this.isCollectionElement(el)) return el;
+        return {
+          ...el,
+          tmdbId: String(item.id),
+          tmdbItemType: itemType,
+          tmdbData: detail || item
+        };
+      }));
+    };
+
+    applyUpdate();
+    if (animateTargets) this.triggerElementTransitions(transitionTargetIds);
 
     if (!hasEnrichedDetail) {
       this.elements().forEach(el => {
@@ -3104,6 +3492,204 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     );
   }
 
+  private createTmdbRequestContext(): { headers: HttpHeaders; params: URLSearchParams } {
+    let headers = new HttpHeaders({'Content-Type': 'application/json;charset=utf-8'});
+    const params = new URLSearchParams({ language: this.language(), include_adult: this.includeAdult().toString() });
+
+    if (this.authMethod() === 'v4') {
+      headers = headers.set('Authorization', `Bearer ${this.tmdbReadToken()}`);
+    } else {
+      params.append('api_key', this.tmdbApiKey());
+    }
+
+    return { headers, params };
+  }
+
+  private fetchCollectionEndpointData(
+    endpoint: string,
+    collectionType: 'movie' | 'tv',
+    headers: HttpHeaders,
+    baseParams: URLSearchParams,
+    itemLimit: number
+  ): Observable<any> {
+    const normalizedEndpoint = this.normalizeCollectionEndpoint(collectionType, endpoint);
+    const pageCount = Math.max(1, Math.ceil(itemLimit / 20));
+    const endpointFilters = this.getGlobalDiscoverFiltersForType(collectionType);
+    const buildCollectionUrl = (page: number) => {
+      const pageParams = new URLSearchParams(baseParams.toString());
+      if (normalizedEndpoint.startsWith('discover')) {
+        pageParams.append('sort_by', endpointFilters.sortBy);
+        if (endpointFilters.genres.length > 0) pageParams.append('with_genres', endpointFilters.genres.join(','));
+        const yearKey = collectionType === 'movie' ? 'primary_release_year' : 'first_air_date_year';
+        if (endpointFilters.year) pageParams.append(yearKey, endpointFilters.year.toString());
+      }
+      pageParams.append('watch_region', this.watchRegion());
+      pageParams.set('page', page.toString());
+      return `https://api.themoviedb.org/3/${normalizedEndpoint}?${pageParams.toString()}`;
+    };
+
+    const requests = Array.from({ length: pageCount }, (_, index) => this.http.get<any>(buildCollectionUrl(index + 1), { headers }));
+    return (requests.length > 1 ? forkJoin(requests) : requests[0].pipe(map(response => [response]))).pipe(
+      map(responses => {
+        const first = responses[0] || {};
+        return {
+          ...first,
+          results: responses
+            .flatMap(response => Array.isArray(response?.results) ? response.results : [])
+            .slice(0, itemLimit)
+            .map((item: any) => ({ ...item, media_type: item?.media_type || collectionType }))
+        };
+      })
+    );
+  }
+
+  private getGlobalSlideshowItems(data = this.globalSlideshowData()): any[] {
+    const results = data?.results;
+    if (!Array.isArray(results) || results.length === 0) return [];
+    return results.filter((item: any) => item?.id).slice(0, this.globalCollectionItemLimit());
+  }
+
+  private enrichGlobalSlideshowData(data: any, headers: HttpHeaders): Observable<any> {
+    if (!data || !Array.isArray(data.results)) return of(data);
+
+    const items = this.getGlobalSlideshowItems(data);
+    if (items.length === 0) return of(data);
+
+    const fallbackType = (data.__collectionType || this.globalCollectionType()) as TmdbCollectionType;
+    const requests = items.map((item: any) =>
+      this.http.get<any>(this.buildTmdbDetailUrl(item, fallbackType), { headers }).pipe(
+        catchError(() => of(item)),
+        map(detail => ({
+          key: this.detailKeyForItem(item, fallbackType),
+          altKey: String(item.id),
+          detail
+        } as TmdbDetailEntry))
+      )
+    );
+
+    return forkJoin(requests).pipe(
+      map(entries => {
+        const detailsById = entries.reduce((acc, entry) => {
+          if (entry.key) acc[entry.key] = entry.detail;
+          if (entry.altKey) acc[entry.altKey] = entry.detail;
+          return acc;
+        }, {} as Record<string, any>);
+
+        return {
+          ...data,
+          __detailsById: detailsById
+        };
+      })
+    );
+  }
+
+  private fetchGlobalSlideshowData() {
+    if (!this.isApiConfigured() || !this.hasGlobalSlideshowTargets()) {
+      this.clearGlobalSlideshowRuntime();
+      return;
+    }
+
+    const requestToken = ++this.globalSlideshowFetchSequence;
+    const { headers, params } = this.createTmdbRequestContext();
+    const collectionType = this.globalCollectionType();
+    const itemLimit = this.globalCollectionItemLimit();
+    let obs: Observable<any>;
+
+    if (collectionType === 'mixed') {
+      obs = forkJoin([
+        this.fetchCollectionEndpointData(this.getGlobalCollectionEndpointForType('movie'), 'movie', headers, params, itemLimit),
+        this.fetchCollectionEndpointData(this.getGlobalCollectionEndpointForType('tv'), 'tv', headers, params, itemLimit)
+      ]).pipe(
+        map(([movieData, tvData]) => ({
+          ...(movieData || tvData || {}),
+          results: this.interleaveMixedCollectionItems([
+            ...(Array.isArray(movieData?.results) ? movieData.results : []),
+            ...(Array.isArray(tvData?.results) ? tvData.results : [])
+          ]).slice(0, itemLimit),
+          __collectionType: 'mixed'
+        })),
+        switchMap(data => this.enrichGlobalSlideshowData(data, headers))
+      );
+    } else {
+      obs = this.fetchCollectionEndpointData(
+        this.getGlobalCollectionEndpointForType(collectionType),
+        collectionType,
+        headers,
+        params,
+        itemLimit
+      ).pipe(
+        map(data => ({ ...data, __collectionType: collectionType })),
+        switchMap(data => this.enrichGlobalSlideshowData(data, headers))
+      );
+    }
+
+    obs.pipe(catchError(() => of(null)), takeUntil(this.destroy$)).subscribe(data => {
+      if (!data || requestToken !== this.globalSlideshowFetchSequence) return;
+      if (!this.hasGlobalSlideshowTargets()) return;
+      this.globalSlideshowData.set(data);
+      this.setupGlobalSlideshowRuntime();
+      this.cdr.detectChanges();
+    });
+  }
+
+  private setupGlobalSlideshowRuntime() {
+    this.clearGlobalSlideshowRuntime(false);
+    const runToken = this.globalSlideshowRunToken;
+    const data = this.globalSlideshowData();
+    const items = this.getGlobalSlideshowItems(data);
+    if (items.length === 0 || !this.hasGlobalSlideshowTargets()) return;
+
+    this.globalSlideshowIndex = 0;
+    void this.propagateGlobalSlideshowItem(items[0], runToken);
+    if (items.length < 2) return;
+
+    const durationMs = this.globalSlideshowDurationMs();
+    this.globalSlideshowInterval = setInterval(() => {
+      if (this.globalSlideshowRunToken !== runToken) return;
+      const latestItems = this.getGlobalSlideshowItems();
+      if (latestItems.length === 0 || !this.hasGlobalSlideshowTargets()) {
+        this.clearGlobalSlideshowRuntime();
+        return;
+      }
+      this.globalSlideshowIndex = (this.globalSlideshowIndex + 1) % latestItems.length;
+      void this.propagateGlobalSlideshowItem(latestItems[this.globalSlideshowIndex], runToken);
+    }, durationMs);
+  }
+
+  private async propagateGlobalSlideshowItem(item: any, runToken = this.globalSlideshowRunToken) {
+    if (!item?.id) return;
+
+    const data = this.globalSlideshowData();
+    const fallbackType = (data?.__collectionType || this.globalCollectionType()) as TmdbCollectionType;
+    const itemType = this.resolveItemTypeFromSourceItem(item, fallbackType);
+    const details = data?.__detailsById || {};
+    const key = this.detailKeyForItem(item, fallbackType);
+    const detail = details[key] || details[String(item.id)] || item;
+    const targets = this.elements().filter(el => this.isGlobalSlideshowTarget(el));
+    const targetIds = targets.map(el => el.id);
+
+    if (targetIds.length === 0) return;
+    const applySequence = ++this.globalSlideshowApplySequence;
+    await this.preloadGlobalTargetMedia(targets, detail);
+    if (this.globalSlideshowRunToken !== runToken || this.globalSlideshowApplySequence !== applySequence) return;
+
+    const stagedBackdropIds = new Set(this.prepareDynamicBackdropTransitions(targets, detail));
+    this.elements.update(els => els.map(el => {
+      if (!this.isGlobalSlideshowTarget(el, els)) return el;
+      return {
+        ...el,
+        tmdbId: String(item.id),
+        tmdbItemType: itemType,
+        tmdbCollectionType: itemType === 'tv' ? 'tv' : 'movie',
+        tmdbEndpoint: undefined,
+        tmdbData: detail
+      };
+    }));
+    this.triggerElementTransitions(targetIds);
+    this.cdr.detectChanges();
+    this.startDynamicBackdropTransitions(Array.from(stagedBackdropIds));
+  }
+
   searchTmdb(query: string) { this.searchTerms.next(query); }
 
   selectTmdbItem(item: any) {
@@ -3268,6 +3854,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         if (el.type === 'tmdb-backdrop-slideshow') this.setupSlideshow(el.id);
         if (el.type === 'tmdb-poster-scroll') this.setupPosterScroll(el.id);
       });
+      this.triggerElementTransitions(collectionViews.map(el => el.id));
       this.cdr.detectChanges();
     });
   }
@@ -3316,7 +3903,13 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
     const promise = new Promise<void>(resolve => {
       const img = new Image();
-      img.onload = () => resolve();
+      img.decoding = 'async';
+      img.onload = () => {
+        const decoded = typeof img.decode === 'function'
+          ? img.decode().catch(() => undefined)
+          : Promise.resolve();
+        decoded.then(() => resolve());
+      };
       img.onerror = () => resolve();
       img.src = url;
     });
@@ -3328,8 +3921,153 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     urls.forEach(url => void this.preloadSlideshowImage(url));
   }
 
+  private getBackdropImageUrlFromData(data: any): string | undefined {
+    return data?.backdrop_path ? 'https://image.tmdb.org/t/p/w1280' + data.backdrop_path : undefined;
+  }
+
+  private getBestLogoUrlFromData(data: any): string | undefined {
+    const logos = data?.images?.logos;
+    if (!Array.isArray(logos) || logos.length === 0) return undefined;
+    const langLogo = logos.find((logo: any) => logo.iso_639_1 === this.language().substring(0, 2));
+    const englishLogo = logos.find((logo: any) => logo.iso_639_1 === 'en');
+    const chosenLogo = langLogo || englishLogo || logos[0];
+    return chosenLogo?.file_path ? 'https://image.tmdb.org/t/p/w500' + chosenLogo.file_path : undefined;
+  }
+
+  private getGlobalTargetMediaPreloadUrl(element: CanvasElement, data: any): string | undefined {
+    switch (element.type) {
+      case 'tmdb-backdrop':
+        return this.getBackdropImageUrlFromData(data);
+      case 'tmdb-poster':
+        return data?.poster_path ? 'https://image.tmdb.org/t/p/w500' + data.poster_path : undefined;
+      case 'tmdb-logo':
+        return this.getBestLogoUrlFromData(data);
+      case 'tmdb-network-logo':
+        return data?.networks?.[0]?.logo_path ? 'https://image.tmdb.org/t/p/w300' + data.networks[0].logo_path : undefined;
+      default:
+        return undefined;
+    }
+  }
+
+  private preloadGlobalTargetMedia(targets: CanvasElement[], data: any): Promise<void> {
+    const urls = Array.from(new Set(targets.map(target => this.getGlobalTargetMediaPreloadUrl(target, data)).filter((url): url is string => !!url)));
+    if (urls.length === 0) return Promise.resolve();
+    return Promise.all(urls.map(url => this.preloadSlideshowImage(url))).then(() => undefined);
+  }
+
+  private clearDynamicBackdropTransitionTimeout(elementId: string) {
+    const timeout = this.dynamicBackdropTransitionTimeouts.get(elementId);
+    if (!timeout) return;
+    clearTimeout(timeout);
+    this.dynamicBackdropTransitionTimeouts.delete(elementId);
+  }
+
+  private clearDynamicBackdropTransitions(elementId?: string) {
+    if (elementId) {
+      this.clearDynamicBackdropTransitionTimeout(elementId);
+      this.dynamicBackdropTransitions.update(states => {
+        if (!states[elementId]) return states;
+        const { [elementId]: _removed, ...rest } = states;
+        return rest;
+      });
+      return;
+    }
+
+    this.dynamicBackdropTransitionTimeouts.forEach(timeout => clearTimeout(timeout));
+    this.dynamicBackdropTransitionTimeouts.clear();
+    this.dynamicBackdropTransitions.set({});
+  }
+
+  private prepareDynamicBackdropTransitions(targets: CanvasElement[], data: any): string[] {
+    const nextUrl = this.getBackdropImageUrlFromData(data);
+    if (!nextUrl) return [];
+
+    const currentStates = this.dynamicBackdropTransitions();
+    const nextStates = { ...currentStates };
+    const stagedIds: string[] = [];
+    let changed = false;
+
+    targets.forEach(target => {
+      if (target.type !== 'tmdb-backdrop') return;
+      if (this.getBackdropSlideshowStateForElement(target)) return;
+      if (!this.isSlideshowTransitionEnabled(target)) {
+        if (nextStates[target.id]) {
+          delete nextStates[target.id];
+          changed = true;
+        }
+        return;
+      }
+
+      const currentUrl = this.getBackdropImageUrlFromData(target.tmdbData);
+      if (!currentUrl || currentUrl === nextUrl) {
+        if (nextStates[target.id]) {
+          delete nextStates[target.id];
+          changed = true;
+        }
+        return;
+      }
+
+      this.clearDynamicBackdropTransitionTimeout(target.id);
+      nextStates[target.id] = {
+        currentUrl,
+        underlayUrl: nextUrl,
+        fade: false,
+        resetting: false,
+        version: (currentStates[target.id]?.version || 0) + 1
+      };
+      stagedIds.push(target.id);
+      changed = true;
+    });
+
+    if (changed) this.dynamicBackdropTransitions.set(nextStates);
+    return stagedIds;
+  }
+
+  private startDynamicBackdropTransitions(elementIds: string[]) {
+    if (elementIds.length === 0) return;
+    requestAnimationFrame(() => {
+      const versions = new Map<string, number>();
+      this.dynamicBackdropTransitions.update(states => {
+        const next = { ...states };
+        elementIds.forEach(id => {
+          const state = next[id];
+          if (!state) return;
+          versions.set(id, state.version);
+          next[id] = { ...state, fade: true, resetting: false };
+        });
+        return next;
+      });
+      this.cdr.detectChanges();
+      elementIds.forEach(id => {
+        const version = versions.get(id);
+        if (version !== undefined) this.scheduleDynamicBackdropTransitionCleanup(id, version);
+      });
+    });
+  }
+
+  private scheduleDynamicBackdropTransitionCleanup(elementId: string, version: number) {
+    this.clearDynamicBackdropTransitionTimeout(elementId);
+    const element = this.elements().find(el => el.id === elementId);
+    const transitionMs = element
+      ? this.getEffectiveTransitionDelayMs(element) + this.getEffectiveTransitionDurationMs(element)
+      : 500;
+
+    const timeout = setTimeout(() => {
+      this.dynamicBackdropTransitionTimeouts.delete(elementId);
+      this.dynamicBackdropTransitions.update(states => {
+        if (states[elementId]?.version !== version) return states;
+        const { [elementId]: _removed, ...rest } = states;
+        return rest;
+      });
+      this.cdr.detectChanges();
+    }, Math.max(0, transitionMs) + 120);
+
+    this.dynamicBackdropTransitionTimeouts.set(elementId, timeout);
+  }
+
   setupSlideshow(elementId: string) {
     this.clearCollectionRuntime(elementId);
+    const runToken = this.createSlideshowRunToken(elementId);
 
     const element = this.elements().find(e => e.id === elementId);
     if (!element) return;
@@ -3338,7 +4076,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     const backdrops = slideItems.map((item: any) => 'https://image.tmdb.org/t/p/w1280' + item.backdrop_path);
     if (backdrops.length === 0) return;
 
-    this.warmSlideshowImages([backdrops[0], backdrops[1]]);
+    this.warmSlideshowImages([backdrops[0], backdrops[1], backdrops[2]]);
     this.slideshowState.update(s => ({...s, [elementId]: { idx1: 0, idx2: backdrops.length > 1 ? 1 : 0, fade: false, resetting: false, sceneFade: false, backdrops, items: slideItems }}));
     this.propagateSourceItemToLinkedGroup(elementId, element, slideItems[0]);
 
@@ -3346,56 +4084,49 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
     const slideshowDurationMs = this.getEffectiveSlideshowDurationMs(element);
     let isAdvancing = false;
-
-    const completeSlideAdvance = () => {
-        let nextPreloadUrl: string | undefined;
-        this.slideshowState.update(s => {
-            const current = s[elementId];
-            if (!current) return s;
-            const nextNextIdx = (current.idx2 + 1) % current.backdrops.length;
-            nextPreloadUrl = current.backdrops[nextNextIdx];
-            return {...s, [elementId]: { ...current, idx1: current.idx2, idx2: nextNextIdx, fade: false, resetting: true, sceneFade: false } };
-        });
-        void this.preloadSlideshowImage(nextPreloadUrl);
-        this.cdr.detectChanges();
-
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            this.slideshowState.update(s => {
-              const current = s[elementId];
-              return current ? {...s, [elementId]: { ...current, resetting: false } } : s;
-            });
-            this.cdr.detectChanges();
-          });
-        });
+    const scheduleNextSlide = () => {
+      if (!this.isCurrentSlideshowRun(elementId, runToken)) return;
+      this.clearSlideshowTimeout(this.slideshowIntervals, elementId);
+      const timeout = setTimeout(() => advanceSlide(), slideshowDurationMs);
+      this.slideshowIntervals.set(elementId, timeout);
     };
+    this.slideshowNextSchedulers.set(elementId, scheduleNextSlide);
 
     const advanceSlide = () => {
-        if (isAdvancing) return;
+        this.slideshowIntervals.delete(elementId);
+        if (!this.isCurrentSlideshowRun(elementId, runToken)) return;
+        if (isAdvancing) {
+          scheduleNextSlide();
+          return;
+        }
         const el = this.elements().find(e => e.id === elementId);
         const state = this.slideshowState()[elementId];
-        if (!state) return;
-        if (state.fade) return;
+        if (!el || !state) return;
+        if (state.fade || state.resetting) {
+          scheduleNextSlide();
+          return;
+        }
 
         isAdvancing = true;
         void this.preloadSlideshowImage(state.backdrops[state.idx2]).then(() => {
+          if (!this.isCurrentSlideshowRun(elementId, runToken)) return;
           const latestEl = this.elements().find(e => e.id === elementId);
           const latestState = this.slideshowState()[elementId];
-          if (!latestState || latestState.fade) {
+          if (!latestEl || !latestState || latestState.fade || latestState.resetting) {
             isAdvancing = false;
+            scheduleNextSlide();
             return;
           }
 
           const nextItem = latestState.items[latestState.idx2];
-          if (latestEl && nextItem) this.propagateSourceItemToLinkedGroup(elementId, latestEl, nextItem);
+          if (nextItem) this.propagateSourceItemToLinkedGroup(elementId, latestEl, nextItem, true);
 
-          const transitionMs = latestEl && this.isSlideshowTransitionEnabled(latestEl)
-            ? this.getEffectiveTransitionDurationMs(latestEl)
-            : 0;
+          const transitionMs = this.getBackdropSlideshowRuntimeTransitionMs(latestEl);
 
           if (transitionMs <= 0) {
-            completeSlideAdvance();
+            this.completeSlideshowTransition(elementId, runToken);
             isAdvancing = false;
+            scheduleNextSlide();
             return;
           }
 
@@ -3404,15 +4135,14 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
             return current ? {...s, [elementId]: { ...current, fade: true, resetting: false, sceneFade: false } } : s;
           });
           this.cdr.detectChanges();
-          setTimeout(() => {
-            completeSlideAdvance();
+          this.scheduleSlideshowCompletion(elementId, transitionMs + 50, runToken, () => {
             isAdvancing = false;
-          }, transitionMs + 50);
+            scheduleNextSlide();
+          });
         });
     };
 
-    const interval = setInterval(() => advanceSlide(), slideshowDurationMs);
-    this.slideshowIntervals.set(elementId, interval);
+    scheduleNextSlide();
   }
 
   // --- UI & INTERACTION ---
@@ -3794,6 +4524,37 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     };
   }
 
+  private buildGlobalCollectionExportSource() {
+    const collectionType = this.globalCollectionType();
+    const limit = this.globalCollectionItemLimit();
+
+    if (collectionType === 'mixed') {
+      return {
+        kind: 'collection',
+        collectionType: 'mixed',
+        movieEndpoint: this.getGlobalCollectionEndpointForType('movie'),
+        tvEndpoint: this.getGlobalCollectionEndpointForType('tv'),
+        movieDiscoverFilters: this.normalizeExportDiscoverFilters(this.globalDiscoverFilters().movie),
+        tvDiscoverFilters: this.normalizeExportDiscoverFilters(this.globalDiscoverFilters().tv),
+        limit,
+        enrichLinked: true,
+        enrichFirst: false,
+        ttl: 900
+      };
+    }
+
+    return {
+      kind: 'collection',
+      endpoint: this.getGlobalCollectionEndpointForType(collectionType),
+      collectionType,
+      discoverFilters: this.normalizeExportDiscoverFilters(this.getGlobalDiscoverFiltersForType(collectionType)),
+      limit,
+      enrichLinked: true,
+      enrichFirst: false,
+      ttl: 900
+    };
+  }
+
   private buildExportSources(elements: CanvasElement[]) {
     const sources: Record<string, any> = {};
     const elementSources = new Map<string, string>();
@@ -3809,6 +4570,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
     for (const el of elements) {
       if (!el.type.startsWith('tmdb-')) continue;
+      const isGlobalSourceTarget = this.isGlobalSlideshowTarget(el, elements);
       if (!this.isCollectionElement(el) && el.linkGroup && linkedCollectionGroups.has(el.linkGroup)) {
         continue;
       }
@@ -3817,7 +4579,9 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         ? this.getEffectiveCollectionSourceElement(el, elements)
         : el;
       let source: any | null = null;
-      if (sourceEl.tmdbId && sourceEl.tmdbItemType && !this.isCollectionElement(sourceEl)) {
+      if (isGlobalSourceTarget) {
+        source = this.buildGlobalCollectionExportSource();
+      } else if (sourceEl.tmdbId && sourceEl.tmdbItemType && !this.isCollectionElement(sourceEl)) {
         source = {
           kind: 'detail',
           itemType: sourceEl.tmdbItemType,
@@ -3870,6 +4634,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     const baseBackdropUrl = 'https://image.tmdb.org/t/p/w1280';
     const sourcePromises = new Map();
     const imagePreloads = new Map();
+    const globalSlideshows = new Map();
 
     function resolveDataPath(data, path) {
         if (!data || !path) return '';
@@ -3991,6 +4756,131 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         el.style.animation = animation;
     }
 
+    function getBackdropLayerTransitionSettings(el) {
+        const effect = el.dataset.transitionEffect || 'none';
+        const duration = Math.max(0, Math.min(10000, Number(el.dataset.transitionDuration) || 0));
+        const delay = Math.max(0, Math.min(10000, Number(el.dataset.transitionDelay) || 0));
+        const useTransition = effect !== 'none' && duration > 0;
+        return {
+            effect,
+            duration,
+            delay,
+            total: duration + delay,
+            useTransition,
+            transitionCss: useTransition
+                ? 'opacity ' + duration + 'ms ease-in-out ' + delay + 'ms, transform ' + duration + 'ms cubic-bezier(0.22, 1, 0.36, 1) ' + delay + 'ms, filter ' + duration + 'ms ease-in-out ' + delay + 'ms'
+                : 'none'
+        };
+    }
+
+    function getBackdropExitStyles(effect) {
+        switch (effect) {
+            case 'fade': return { opacity: '0', transform: 'none', filter: 'none' };
+            case 'slide-left': return { opacity: '1', transform: 'translateX(-100%)', filter: 'none' };
+            case 'slide-right': return { opacity: '1', transform: 'translateX(100%)', filter: 'none' };
+            case 'slide-up': return { opacity: '1', transform: 'translateY(-100%)', filter: 'none' };
+            case 'slide-down': return { opacity: '1', transform: 'translateY(100%)', filter: 'none' };
+            case 'zoom': return { opacity: '0', transform: 'scale(1.08)', filter: 'none' };
+            case 'blur': return { opacity: '0', transform: 'none', filter: 'blur(12px)' };
+            case 'flip': return { opacity: '0', transform: 'perspective(800px) rotateY(14deg)', filter: 'none' };
+            case 'bounce': return { opacity: '0', transform: 'scale(0.92)', filter: 'none' };
+            default: return { opacity: '1', transform: 'none', filter: 'none' };
+        }
+    }
+
+    function getBackdropEnterStartStyles(effect) {
+        switch (effect) {
+            case 'fade': return { opacity: '0', transform: 'none', filter: 'none' };
+            case 'slide-left': return { opacity: '1', transform: 'translateX(100%)', filter: 'none' };
+            case 'slide-right': return { opacity: '1', transform: 'translateX(-100%)', filter: 'none' };
+            case 'slide-up': return { opacity: '1', transform: 'translateY(100%)', filter: 'none' };
+            case 'slide-down': return { opacity: '1', transform: 'translateY(-100%)', filter: 'none' };
+            case 'zoom': return { opacity: '0', transform: 'scale(0.94)', filter: 'none' };
+            case 'blur': return { opacity: '0', transform: 'none', filter: 'blur(12px)' };
+            case 'flip': return { opacity: '0', transform: 'perspective(800px) rotateY(-14deg)', filter: 'none' };
+            case 'bounce': return { opacity: '0', transform: 'scale(1.04)', filter: 'none' };
+            default: return { opacity: '1', transform: 'none', filter: 'none' };
+        }
+    }
+
+    function getBackdropEnterEndStyles() {
+        return { opacity: '1', transform: 'none', filter: 'none' };
+    }
+
+    function applyBackdropFrameStyles(frame, styles) {
+        frame.style.opacity = styles.opacity;
+        frame.style.transform = styles.transform;
+        frame.style.filter = styles.filter;
+    }
+
+    function createBackdropFrame(src, fit) {
+        const frame = document.createElement('div');
+        frame.className = 'slideshow-frame';
+        frame.style.position = 'absolute';
+        frame.style.inset = '0';
+        frame.style.backgroundImage = src ? 'url(' + src + ')' : '';
+        frame.style.backgroundSize = fit === 'contain' ? 'contain' : (fit === 'fill' ? '100% 100%' : 'cover');
+        frame.style.backgroundPosition = 'center';
+        frame.style.backgroundRepeat = 'no-repeat';
+        frame.style.pointerEvents = 'none';
+        frame.style.backfaceVisibility = 'hidden';
+        frame.style.transformOrigin = 'center center';
+        return frame;
+    }
+
+    function renderGlobalBackdrop(el, item, imageFit) {
+        const nextUrl = item && item.backdrop_path ? baseBackdropUrl + item.backdrop_path : '';
+        const previousUrl = el.dataset.currentBackdropUrl || '';
+        const token = String((Number(el.dataset.backdropTransitionToken) || 0) + 1);
+        el.dataset.backdropTransitionToken = token;
+        if (el._backdropTransitionTimer) clearTimeout(el._backdropTransitionTimer);
+
+        if (!nextUrl) {
+            clearElement(el);
+            delete el.dataset.currentBackdropUrl;
+            return;
+        }
+
+        const settings = getBackdropLayerTransitionSettings(el);
+        if (!settings.useTransition || !previousUrl || previousUrl === nextUrl) {
+            appendImage(el, nextUrl, 'Backdrop', imageFit);
+            el.dataset.currentBackdropUrl = nextUrl;
+            restartElementTransition(el);
+            return;
+        }
+
+        preloadImage(nextUrl).then(() => {
+            if (el.dataset.backdropTransitionToken !== token) return;
+
+            clearElement(el);
+            const underlayFrame = createBackdropFrame(nextUrl, imageFit);
+            const currentFrame = createBackdropFrame(previousUrl, imageFit);
+            underlayFrame.style.zIndex = '1';
+            currentFrame.style.zIndex = '2';
+            underlayFrame.style.transition = 'none';
+            currentFrame.style.transition = 'none';
+            applyBackdropFrameStyles(underlayFrame, getBackdropEnterStartStyles(settings.effect));
+            applyBackdropFrameStyles(currentFrame, getBackdropEnterEndStyles());
+            el.appendChild(underlayFrame);
+            el.appendChild(currentFrame);
+
+            requestAnimationFrame(() => {
+                if (el.dataset.backdropTransitionToken !== token) return;
+                underlayFrame.style.transition = settings.transitionCss;
+                currentFrame.style.transition = settings.transitionCss;
+                applyBackdropFrameStyles(underlayFrame, getBackdropEnterEndStyles());
+                applyBackdropFrameStyles(currentFrame, getBackdropExitStyles(settings.effect));
+            });
+
+            el._backdropTransitionTimer = setTimeout(() => {
+                if (el.dataset.backdropTransitionToken !== token) return;
+                appendImage(el, nextUrl, 'Backdrop', imageFit);
+                el.dataset.currentBackdropUrl = nextUrl;
+                el._backdropTransitionTimer = null;
+            }, settings.total + 120);
+        });
+    }
+
     function renderGenres(el, item) {
         clearElement(el);
         if (!Array.isArray(item.genres)) return;
@@ -4069,14 +4959,16 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         const slideshowDuration = Math.max(1000, Math.min(60000, Number(el.dataset.slideshowDuration) || 5000));
         const transitionEffect = el.dataset.transitionEffect || 'none';
         const transitionDuration = Math.max(0, Math.min(10000, Number(el.dataset.transitionDuration) || 0));
+        const transitionDelay = Math.max(0, Math.min(10000, Number(el.dataset.transitionDelay) || 0));
         const useTransition = transitionEffect !== 'none' && transitionDuration > 0;
+        const transitionTotal = transitionDuration + transitionDelay;
         const transitionCss = useTransition
-            ? 'opacity ' + transitionDuration + 'ms ease-in-out, transform ' + transitionDuration + 'ms cubic-bezier(0.22, 1, 0.36, 1), filter ' + transitionDuration + 'ms ease-in-out'
+            ? 'opacity ' + transitionDuration + 'ms ease-in-out ' + transitionDelay + 'ms, transform ' + transitionDuration + 'ms cubic-bezier(0.22, 1, 0.36, 1) ' + transitionDelay + 'ms, filter ' + transitionDuration + 'ms ease-in-out ' + transitionDelay + 'ms'
             : 'none';
         let currentIdx = 0;
         let transitioning = false;
 
-        if (el._slideshowTimer) clearInterval(el._slideshowTimer);
+	        if (el._slideshowTimer) clearTimeout(el._slideshowTimer);
         clearElement(el);
         el.style.backgroundImage = '';
 
@@ -4093,11 +4985,12 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
             frame.style.transform = 'none';
             frame.style.filter = 'none';
         });
-        nextFrame.style.zIndex = '1';
-        currentFrame.style.zIndex = '2';
-        currentFrame.style.transition = transitionCss;
-        el.appendChild(nextFrame);
-        el.appendChild(currentFrame);
+	        nextFrame.style.zIndex = '1';
+	        currentFrame.style.zIndex = '2';
+	        nextFrame.style.transition = transitionCss;
+	        currentFrame.style.transition = transitionCss;
+	        el.appendChild(nextFrame);
+	        el.appendChild(currentFrame);
 
         function getBackdropUrl(item) {
             return item && item.backdrop_path ? baseBackdropUrl + item.backdrop_path : '';
@@ -4114,10 +5007,17 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
             updateLinkedGroup(el.dataset.linkGroup, detailForCollectionItem(data, item, fallbackType), el);
         }
 
-        function preloadNext() {
-            const nextIdx = (currentIdx + 1) % results.length;
-            setFrame(nextFrame, results[nextIdx]);
-        }
+	        function preloadNext() {
+	            const nextIdx = (currentIdx + 1) % results.length;
+	            setFrame(nextFrame, results[nextIdx]);
+	            resetNextFrame();
+	        }
+
+	        function applyFrameStyles(frame, styles) {
+	            frame.style.opacity = styles.opacity;
+	            frame.style.transform = styles.transform;
+	            frame.style.filter = styles.filter;
+	        }
 
         function getExitStyles() {
             switch (transitionEffect) {
@@ -4130,26 +5030,57 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
                 case 'blur': return { opacity: '0', transform: 'none', filter: 'blur(12px)' };
                 case 'flip': return { opacity: '0', transform: 'perspective(800px) rotateY(14deg)', filter: 'none' };
                 case 'bounce': return { opacity: '0', transform: 'scale(0.92)', filter: 'none' };
-                default: return { opacity: '1', transform: 'none', filter: 'none' };
-            }
-        }
+	                default: return { opacity: '1', transform: 'none', filter: 'none' };
+	            }
+	        }
 
-        function resetCurrentFrame() {
-            currentFrame.style.transition = 'none';
-            currentFrame.style.opacity = '1';
-            currentFrame.style.transform = 'none';
-            currentFrame.style.filter = 'none';
-            requestAnimationFrame(() => {
-                currentFrame.style.transition = transitionCss;
-            });
-        }
+	        function getEnterStartStyles() {
+	            switch (transitionEffect) {
+	                case 'fade': return { opacity: '0', transform: 'none', filter: 'none' };
+	                case 'slide-left': return { opacity: '1', transform: 'translateX(100%)', filter: 'none' };
+	                case 'slide-right': return { opacity: '1', transform: 'translateX(-100%)', filter: 'none' };
+	                case 'slide-up': return { opacity: '1', transform: 'translateY(100%)', filter: 'none' };
+	                case 'slide-down': return { opacity: '1', transform: 'translateY(-100%)', filter: 'none' };
+	                case 'zoom': return { opacity: '0', transform: 'scale(0.94)', filter: 'none' };
+	                case 'blur': return { opacity: '0', transform: 'none', filter: 'blur(12px)' };
+	                case 'flip': return { opacity: '0', transform: 'perspective(800px) rotateY(-14deg)', filter: 'none' };
+	                case 'bounce': return { opacity: '0', transform: 'scale(1.04)', filter: 'none' };
+	                default: return { opacity: '1', transform: 'none', filter: 'none' };
+	            }
+	        }
+
+	        function getEnterEndStyles() {
+	            return { opacity: '1', transform: 'none', filter: 'none' };
+	        }
+
+	        function resetCurrentFrame() {
+	            currentFrame.style.transition = 'none';
+	            applyFrameStyles(currentFrame, getEnterEndStyles());
+	            requestAnimationFrame(() => {
+	                currentFrame.style.transition = transitionCss;
+	            });
+	        }
+
+	        function resetNextFrame() {
+	            nextFrame.style.transition = 'none';
+	            applyFrameStyles(nextFrame, getEnterStartStyles());
+	            requestAnimationFrame(() => {
+	                nextFrame.style.transition = transitionCss;
+	            });
+	        }
 
         setFrame(currentFrame, results[0]);
         preloadNext();
         updateLinked(0);
 
         if (results.length > 1) {
-            el._slideshowTimer = setInterval(() => {
+            function scheduleNextSlide() {
+                if (el._slideshowTimer) clearTimeout(el._slideshowTimer);
+                el._slideshowTimer = setTimeout(advanceSlide, slideshowDuration);
+            }
+
+            function advanceSlide() {
+                el._slideshowTimer = null;
                 if (transitioning) return;
                 const nextIdx = (currentIdx + 1) % results.length;
                 transitioning = true;
@@ -4162,23 +5093,56 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
                         setFrame(currentFrame, results[currentIdx]);
                         preloadNext();
                         transitioning = false;
+                        scheduleNextSlide();
                         return;
                     }
 
-                    const exitStyles = getExitStyles();
-                    currentFrame.style.transition = transitionCss;
-                    currentFrame.style.opacity = exitStyles.opacity;
-                    currentFrame.style.transform = exitStyles.transform;
-                    currentFrame.style.filter = exitStyles.filter;
+	                    currentFrame.style.transition = transitionCss;
+	                    nextFrame.style.transition = transitionCss;
+	                    applyFrameStyles(currentFrame, getExitStyles());
+	                    applyFrameStyles(nextFrame, getEnterEndStyles());
                     setTimeout(() => {
                         currentIdx = nextIdx;
                         setFrame(currentFrame, results[currentIdx]);
                         resetCurrentFrame();
                         preloadNext();
                         transitioning = false;
-                    }, transitionDuration + 50);
+                        scheduleNextSlide();
+                    }, transitionTotal + 50);
                 });
-            }, slideshowDuration);
+            }
+
+            scheduleNextSlide();
+        }
+    }
+
+    function getGlobalSlideshowTargets(sourceId) {
+        return Array.from(document.querySelectorAll('[data-global-slideshow="true"]')).filter(el => el.dataset.sourceId === sourceId);
+    }
+
+    function startGlobalSlideshow(sourceId, data) {
+        if (!sourceId || globalSlideshows.has(sourceId)) return;
+        const results = Array.isArray(data && data.results) ? data.results.filter(item => item && item.id) : [];
+        const targets = getGlobalSlideshowTargets(sourceId);
+        if (results.length === 0 || targets.length === 0) return;
+
+        const fallbackType = data.__collectionType || targets[0].dataset.itemType || 'movie';
+        const duration = Math.max(1000, Math.min(60000, Number(targets[0].dataset.slideshowDuration) || 5000));
+        const state = { index: 0, timer: null };
+        globalSlideshows.set(sourceId, state);
+
+        function renderSlide(index) {
+            const item = detailForCollectionItem(data, results[index], fallbackType);
+            getGlobalSlideshowTargets(sourceId).forEach(target => renderElement(target, item));
+        }
+
+        renderSlide(0);
+
+        if (results.length > 1) {
+            state.timer = setInterval(() => {
+                state.index = (state.index + 1) % results.length;
+                renderSlide(state.index);
+            }, duration);
         }
     }
 
@@ -4207,6 +5171,10 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
                 appendImage(el, item.poster_path ? baseImgUrl + item.poster_path : '', 'Poster', imageFit);
                 break;
             case 'tmdb-backdrop':
+                if (el.dataset.globalSlideshow === 'true') {
+                    renderGlobalBackdrop(el, item, imageFit);
+                    return;
+                }
                 appendImage(el, item.backdrop_path ? baseBackdropUrl + item.backdrop_path : '', 'Backdrop', imageFit);
                 break;
             case 'tmdb-logo':
@@ -4258,6 +5226,10 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
             if (!sourceId) return;
             fetchSource(sourceId).then(data => {
                 if (!data) return;
+                if (el.dataset.globalSlideshow === 'true' && Array.isArray(data.results)) {
+                    startGlobalSlideshow(sourceId, data);
+                    return;
+                }
                 renderElement(el, data);
                 if (el.dataset.linkGroup && !Array.isArray(data.results)) {
                     updateLinkedGroup(el.dataset.linkGroup, data, el);
@@ -4415,6 +5387,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     const htmlElements = visibleElements
         .map(el => {
             const sourceId = elementSources.get(el.id);
+            const isGlobalSourceTarget = this.isGlobalSlideshowTarget(el, visibleElements);
             const attrs = [
               `id="${this.escapeHtml(this.safeElementId(el.id))}"`,
               `data-type="${this.escapeHtml(el.type)}"`,
@@ -4424,14 +5397,24 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
             ];
             if (el.type === 'tmdb-cast') attrs.push(`data-cast-count="${this.getCastCount(el)}"`);
             const transitionAnimation = this.getTransitionAnimationCss(el, visibleElements);
-            if (transitionAnimation) attrs.push(`data-transition-animation="${this.escapeHtml(transitionAnimation)}"`);
+            if (transitionAnimation) {
+                attrs.push(`data-transition-animation="${this.escapeHtml(transitionAnimation)}"`);
+                attrs.push(`data-transition-effect="${this.escapeHtml(this.getEffectiveTransitionEffect(el, visibleElements))}"`);
+                attrs.push(`data-transition-duration="${this.getEffectiveTransitionDurationMs(el, visibleElements)}"`);
+                attrs.push(`data-transition-delay="${this.getEffectiveTransitionDelayMs(el, visibleElements)}"`);
+            }
             if (sourceId) attrs.push(`data-source-id="${this.escapeHtml(sourceId)}"`);
             if (el.linkGroup) attrs.push(`data-link-group="${this.escapeHtml(el.linkGroup)}"`);
+            if (isGlobalSourceTarget) {
+                attrs.push(`data-global-slideshow="true"`);
+                attrs.push(`data-slideshow-duration="${this.globalSlideshowDurationMs()}"`);
+            }
             if (this.isCollectionElement(el)) attrs.push(`data-collection-limit="${this.getEffectiveCollectionItemLimit(el, visibleElements)}"`);
             if (el.type === 'tmdb-backdrop-slideshow') {
                 attrs.push(`data-slideshow-duration="${this.getEffectiveSlideshowDurationMs(el, visibleElements)}"`);
                 attrs.push(`data-transition-effect="${this.escapeHtml(this.getEffectiveTransitionEffect(el, visibleElements))}"`);
                 attrs.push(`data-transition-duration="${this.getEffectiveTransitionDurationMs(el, visibleElements)}"`);
+                attrs.push(`data-transition-delay="${this.getEffectiveTransitionDelayMs(el, visibleElements)}"`);
             }
             if (el.type === 'tmdb-dynamic-field') {
                 attrs.push(`data-data-path="${this.escapeHtml(el.dataPath || '')}"`);

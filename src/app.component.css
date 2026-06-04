@@ -201,10 +201,69 @@ body {
 
 .draggable-element {
   transition: opacity 0.6s ease;
+  cursor: default;
+  user-select: none;
 }
+
+.draggable-element * {
+  cursor: inherit;
+  user-select: none;
+}
+
+.draggable-element .cursor-se-resize {
+  cursor: se-resize;
+}
+
+.draggable-element img,
+.draggable-element .content-media {
+  -webkit-user-drag: none;
+}
+
+.draggable-element.tmdb-transition-active {
+  animation-duration: 500ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-delay: 0ms;
+  animation-fill-mode: both;
+}
+
+.tmdb-transition-fade { animation-name: tmdbFadeIn; }
+.tmdb-transition-slide-left { animation-name: tmdbSlideInLeft; }
+.tmdb-transition-slide-right { animation-name: tmdbSlideInRight; }
+.tmdb-transition-slide-up { animation-name: tmdbSlideInUp; }
+.tmdb-transition-slide-down { animation-name: tmdbSlideInDown; }
+.tmdb-transition-zoom { animation-name: tmdbZoomIn; }
+.tmdb-transition-blur { animation-name: tmdbBlurIn; }
+.tmdb-transition-flip { animation-name: tmdbFlipIn; }
+.tmdb-transition-bounce { animation-name: tmdbBounceIn; }
+
+.tmdb-transition-fade-alt { animation-name: tmdbFadeInAlt; }
+.tmdb-transition-slide-left-alt { animation-name: tmdbSlideInLeftAlt; }
+.tmdb-transition-slide-right-alt { animation-name: tmdbSlideInRightAlt; }
+.tmdb-transition-slide-up-alt { animation-name: tmdbSlideInUpAlt; }
+.tmdb-transition-slide-down-alt { animation-name: tmdbSlideInDownAlt; }
+.tmdb-transition-zoom-alt { animation-name: tmdbZoomInAlt; }
+.tmdb-transition-blur-alt { animation-name: tmdbBlurInAlt; }
+.tmdb-transition-flip-alt { animation-name: tmdbFlipInAlt; }
+.tmdb-transition-bounce-alt { animation-name: tmdbBounceInAlt; }
 
 .content-media {
   box-sizing: border-box;
+}
+
+.backdrop-slideshow-underlay,
+.backdrop-slideshow-current {
+  background-repeat: no-repeat;
+  backface-visibility: hidden;
+  transform-origin: center center;
+  will-change: opacity, transform, filter;
+}
+
+.backdrop-slideshow-current.backdrop-slideshow-resetting {
+  opacity: 1 !important;
+  transform: none !important;
+  filter: none !important;
+  transition: none !important;
+  visibility: hidden;
 }
 
 @keyframes tmdbFadeIn {
