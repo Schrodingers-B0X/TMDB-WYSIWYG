@@ -24,7 +24,7 @@ A powerful, browser-based visual editor for creating dynamic layouts using The M
   - Text blocks with custom styling
   - Images with URL support
   - Shapes and backgrounds
-  
+
 - **TMDB Data Elements**
   - **Poster** - Movie/TV show poster images
   - **Backdrop** - High-resolution backdrop images
@@ -121,7 +121,7 @@ Add custom **prefix/suffix** text:
   - Bring to front / Send to back
   - Alignment options
   - Image fit modes (Cover/Contain/Fill)
-  
+
 - **Keyboard Shortcuts**
   - `Ctrl+Z` / `Cmd+Z` - Undo
   - `Ctrl+Shift+Z` / `Cmd+Shift+Z` - Redo
@@ -153,6 +153,7 @@ Add custom **prefix/suffix** text:
    npm run dev
    ```
    Open http://localhost:3000
+   
 
 4. **Build for production**
    ```bash
@@ -181,10 +182,15 @@ Add custom **prefix/suffix** text:
 ### 2. Set Canvas Size
 
 **Settings → Canvas Settings**
-- Choose a preset (Desktop/Tablet/Mobile)
-- Or set custom width × height
+- Choose a device category (Mobile/Tablet/TV)
+- Pick a resolution from the toolbar dropdown
+- Review the current size, aspect ratio, and device preset directly in the resolution selector
 - Enable grid overlay for precision
 - Toggle snap-to-grid
+
+Defaults are TV landscape at `1280×720` (`16:9`). TV presets include resolutions up to `1920×1080`, while mobile and tablet presets include common device sizes similar to browser device emulation tools.
+
+The zoom control lives in the bottom-right of the canvas viewport. Use **Fit** to scale the canvas to the available editor space while preserving the canvas aspect ratio.
 
 ### 3. Add Elements
 
@@ -218,6 +224,13 @@ Add custom **prefix/suffix** text:
 **To unlink:**
 - Click the 🔗 icon next to any layer in the Layers panel
 
+**Sync from Properties:**
+- Select any TMDB content element such as poster, title, overview, cast, rating, logo, or dynamic field
+- Open **Properties → TMDB Data Source → Sync with layer**
+- Choose a slideshow, poster scroll, or other TMDB source layer
+- The synced element will share that layer's data and can follow the current slideshow item
+- For backdrop slideshows, synced posters, titles, overviews, cast, ratings, logos, and dynamic fields update to the same TMDB item as the visible backdrop slide
+
 ### 6. Style Elements
 
 **Properties → Styles**
@@ -231,6 +244,11 @@ Add custom **prefix/suffix** text:
 - Alignment shortcuts
 - Layer ordering
 
+**Backdrop sizing shortcuts:**
+- Select a TMDB backdrop or backdrop slideshow
+- Use **Fill Width**, **Fill Height**, or **Cover Canvas** in Properties
+- The element keeps TMDB's standard `16:9` backdrop ratio while fitting the current canvas
+
 ### 7. Work with Collections
 
 **Poster Scroll / Backdrop Slideshow:**
@@ -238,11 +256,21 @@ Add custom **prefix/suffix** text:
 2. Select it → Properties
 3. Choose TMDB collection type (Popular, Top Rated, etc.)
 4. For Discover: Set genre filters, year, sort order
-5. Element auto-populates with TMDB results
+5. Set **Items Shown** to control how many TMDB results are displayed
+6. Element auto-populates with TMDB results
 
 **Link with other elements:**
 - Slideshows can control linked elements
 - When slideshow changes, linked elements update to show current item
+- Synced collection layers use the source collection's item count
+- Backdrop slideshows can use **Global Scene Fade** so the backdrop and synced layers fade together
+
+**Scene-synchronised layouts:**
+- Add a **Backdrop Slideshow** as the scene source
+- Add poster, overview, cast, rating, logo, or dynamic-field layers
+- Select each TMDB layer and choose the slideshow in **Properties → Sync with layer**
+- Enable **Global Scene Fade** on the slideshow for a single fade between full scene states
+- The editor and generated PHP export keep every linked layer on the same TMDB item for each slide
 
 ### 8. Export Your Layout
 
@@ -261,9 +289,13 @@ Add custom **prefix/suffix** text:
 
 The PHP export includes:
 - Responsive CSS (percentage-based positioning)
-- TMDB API integration
+- TMDB API integration through the generated PHP file
+- Server-side credential handling (the browser receives source IDs, not the TMDB key/token)
+- File-based response caching with lock protection for concurrent viewers
 - Auto-updating content
 - Production-ready code
+
+**Concurrent viewer behavior:** the exported PHP file now acts as a same-origin TMDB proxy. Browser JavaScript calls `layout.php?tmdb_source=<id>`, and PHP fetches/caches the TMDB response server-side. Cache writes use file locks so multiple users loading the same layout at once do not all request the same TMDB endpoint simultaneously. Serve the export through PHP; do not publish it as plain text.
 
 ---
 

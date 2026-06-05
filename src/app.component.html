@@ -4,15 +4,40 @@
        [style.left.px]="contextMenu().x"
        [style.top.px]="contextMenu().y"
        (click)="$event.stopPropagation()">
-    
+
     <div class="px-3 py-2 text-xs font-semibold text-[#8eaec4] uppercase tracking-wider border-b border-[#254261] mb-1">Actions</div>
-    
+
     <button (click)="duplicateElement(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors"><i class="fa-solid fa-copy w-4 text-center"></i> Duplicate</button>
     <button (click)="copyStyles(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors"><i class="fa-solid fa-palette w-4 text-center"></i> Copy Styles</button>
     <button (click)="pasteStyles(contextMenu().elementId!)" [disabled]="!copiedStyles()" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-paste w-4 text-center"></i> Paste Styles</button>
-    
+    @if (multiSelectMode()) {
+      <button (click)="toggleMultiSelectFromContext(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors">
+        <i class="fa-solid fa-object-ungroup w-4 text-center"></i>
+        {{ isElementInMultiSelection(contextMenu().elementId) ? 'Remove From Selection' : 'Add To Selection' }}
+      </button>
+    }
+    @if (canGroupSelection()) {
+      <button (click)="groupSelectedLayers()" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors">
+        <i class="fa-solid fa-object-group w-4 text-center"></i> Group Layers
+      </button>
+    }
+    @if (multiSelectMode()) {
+      <button (click)="clearMultiSelection()" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors">
+        <i class="fa-solid fa-xmark w-4 text-center"></i> Clear Multi Selection
+      </button>
+    }
+    @if (isGroupedElement(contextMenu().elementId)) {
+      <button (click)="toggleGroupLockFromContext(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors">
+        <i class="fa-solid w-4 text-center" [class.fa-lock-open]="isElementLayoutGroupLocked(contextMenu().elementId)" [class.fa-lock]="!isElementLayoutGroupLocked(contextMenu().elementId)"></i>
+        {{ isElementLayoutGroupLocked(contextMenu().elementId) ? 'Unlock Group' : 'Lock Group' }}
+      </button>
+      <button (click)="ungroupLayoutGroupFromContext(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors">
+        <i class="fa-solid fa-object-ungroup w-4 text-center"></i> Ungroup Layers
+      </button>
+    }
+
     <div class="my-1 border-t border-[#254261]"></div>
-    
+
     <!-- Align Submenu -->
     <div class="relative group/align">
        <button class="w-full flex items-center justify-between text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors">
@@ -55,17 +80,26 @@
         </div>
     }
 
+    @if (isDynamicElement(contextMenu().elementId)) {
+        <button (click)="toggleSnapToGrid(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors">
+            <i class="fa-solid fa-border-all w-4 text-center"></i>
+            {{ isSnapEnabled(contextMenu().elementId) ? 'Turn Off Snap to Grid' : 'Turn On Snap to Grid' }}
+        </button>
+    }
+
     <button (click)="bringToFront(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors"><i class="fa-solid fa-layer-group w-4 text-center"></i> Bring to Front</button>
+    <button (click)="moveLayerUp(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors"><i class="fa-solid fa-arrow-up w-4 text-center"></i> Move Up One Layer</button>
+    <button (click)="moveLayerDown(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors"><i class="fa-solid fa-arrow-down w-4 text-center"></i> Move Down One Layer</button>
     <button (click)="sendToBack(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors"><i class="fa-solid fa-layer-group w-4 text-center opacity-50"></i> Send to Back</button>
-    
+
     <div class="my-1 border-t border-[#254261]"></div>
-    
+
     <button (click)="deleteElement(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-red-600 hover:text-white text-red-400 transition-colors"><i class="fa-solid fa-trash-can w-4 text-center"></i> Delete</button>
   </div>
 }
 
 <div class="flex h-screen w-screen overflow-hidden text-sm font-sans selection:bg-[#01b4e4] selection:text-white">
-  
+
   <!-- LEFT SIDEBAR -->
   <aside class="w-72 bg-[#06121e] border-r border-[#183352] flex flex-col shrink-0 z-20 shadow-xl">
     <!-- App Brand -->
@@ -92,7 +126,7 @@
         <div class="space-y-6">
             <div class="p-3 rounded-lg bg-[#01b4e4]/5 border border-[#01b4e4]/20">
                 <h2 class="text-[#01b4e4] font-semibold mb-2 flex items-center gap-2"><i class="fa-solid fa-key"></i> API Configuration</h2>
-                
+
                 <!-- Connection Status -->
                 @if (isAuthValid() && tmdbUser()) {
                     <div class="flex items-center gap-3 p-2 bg-[#90cea1]/10 border border-[#90cea1]/30 rounded mb-3">
@@ -107,13 +141,13 @@
                         </div>
                     </div>
                 }
-                
+
                 <!-- Auth Toggle -->
                 <div class="flex bg-[#0a1724] rounded p-1 border border-[#254261] mb-3">
                     <button (click)="authMethod.set('v3')" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-[#01b4e4]]="authMethod() === 'v3'" [class.text-[#0d253f]]="authMethod() === 'v3'" [class.text-[#8eaec4]]="authMethod() !== 'v3'">v3 (Key)</button>
                     <button (click)="authMethod.set('v4')" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-[#01b4e4]]="authMethod() === 'v4'" [class.text-[#0d253f]]="authMethod() === 'v4'" [class.text-[#8eaec4]]="authMethod() !== 'v4'">v4 (Token)</button>
                 </div>
-                
+
                 @if (authMethod() === 'v4') {
                     <div class="input-group mb-0">
                         <label for="apiToken" class="label">Read Access Token</label>
@@ -127,7 +161,7 @@
                         <p class="text-[10px] text-[#64839e] mt-1">Use standard TMDB API Key</p>
                     </div>
                 }
-                
+
                 <button (click)="openTmdbSettings()" class="btn-tmdb w-full mt-3">
                     <img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_1-5bdc75aaebeb75dc7ae79426ddd9be3b2be1e342510f8202baf6bffa71d7f5c4.svg" class="w-5 h-5">
                     <span>Get TMDB Credentials</span>
@@ -160,22 +194,104 @@
             </div>
         </div>
       }
-      
+
       @if(activeLeftPanelTab() === 'elements') {
         <div class="space-y-6">
-            <!-- Static Elements -->
+            <!-- Slideshow Type -->
             <div>
-              <div class="text-xs font-bold text-[#8eaec4] uppercase tracking-wider mb-3 px-1">Static Basics</div>
-              <div class="card-grid">
-                <button (click)="addElement('text')" class="card-btn">
-                    <i class="fa-solid fa-font text-[#01b4e4]"></i> <span>Text</span>
-                </button>
-                <button (click)="addElement('image')" class="card-btn">
-                    <i class="fa-regular fa-image text-[#90cea1]"></i> <span>Image</span>
-                </button>
-                <button (click)="addElement('shape')" class="card-btn">
-                    <i class="fa-solid fa-square text-white"></i> <span>Shape</span>
-                </button>
+              <div class="text-xs font-bold text-[#8eaec4] uppercase tracking-wider mb-3 px-1">Slideshow Type</div>
+              <div class="space-y-2 mb-3">
+                <button (click)="addCollectionSlideshow('movie')" class="btn btn-secondary w-full justify-start"><i class="fa-solid fa-images text-[#90cea1]"></i> Movies</button>
+                <button (click)="addCollectionSlideshow('tv')" class="btn btn-secondary w-full justify-start"><i class="fa-solid fa-tv text-[#90cea1]"></i> TV Shows</button>
+                <button (click)="addCollectionSlideshow('mixed')" class="btn btn-secondary w-full justify-start"><i class="fa-solid fa-clapperboard text-[#01b4e4]"></i> Movies & TV Shows</button>
+              </div>
+
+              <div class="p-3 rounded bg-[#0a1724] border border-[#254261] space-y-3">
+                <div class="input-group mb-0">
+                  <label class="label">Slideshow Settings</label>
+                  <div class="flex bg-[#06121e] rounded p-1 border border-[#183352]">
+                    @for(option of collectionSourceTypeOptions; track option.value) {
+                      <button (click)="updateGlobalCollectionType(option.value)" class="flex-1 py-1 text-[11px] rounded transition-colors" [class.bg-[#01b4e4]]="globalCollectionType() === option.value" [class.text-[#0d253f]]="globalCollectionType() === option.value" [class.text-[#8eaec4]]="globalCollectionType() !== option.value">{{ option.label }}</button>
+                    }
+                  </div>
+                </div>
+
+                @if(globalCollectionType() === 'mixed') {
+                  <div class="grid grid-cols-2 gap-2">
+                    <div class="input-group mb-0">
+                      <label class="label">Movie Endpoint</label>
+                      <select [ngModel]="globalMovieCollectionEndpointValue()" (ngModelChange)="updateGlobalCollectionEndpointForType('movie', $event)" class="select text-xs">
+                        @for(endpoint of tmdbEndpoints.movie; track endpoint.key) {
+                          <option [value]="endpoint.key">{{ endpoint.name }}</option>
+                        }
+                      </select>
+                    </div>
+                    <div class="input-group mb-0">
+                      <label class="label">TV Shows Endpoint</label>
+                      <select [ngModel]="globalTvCollectionEndpointValue()" (ngModelChange)="updateGlobalCollectionEndpointForType('tv', $event)" class="select text-xs">
+                        @for(endpoint of tmdbEndpoints.tv; track endpoint.key) {
+                          <option [value]="endpoint.key">{{ endpoint.name }}</option>
+                        }
+                      </select>
+                    </div>
+                  </div>
+                } @else {
+                  <div class="input-group mb-0">
+                    <label class="label">Endpoint</label>
+                    <select [ngModel]="globalCollectionEndpointValue()" (ngModelChange)="updateGlobalCollectionEndpoint($event)" class="select text-xs">
+                      @for(endpoint of availableGlobalCollectionEndpoints(); track endpoint.key) {
+                        <option [value]="endpoint.key">{{ endpoint.name }}</option>
+                      }
+                    </select>
+                  </div>
+                }
+
+                <div class="grid grid-cols-2 gap-2">
+                  <div class="input-group mb-0">
+                    <label class="label">Items Shown</label>
+                    <select [ngModel]="globalCollectionItemLimit()" (ngModelChange)="updateGlobalCollectionItemLimit(+$event)" class="select text-xs">
+                      @for(limit of collectionItemLimitOptions; track limit) {
+                        <option [value]="limit">{{ limit }}</option>
+                      }
+                    </select>
+                  </div>
+                  <div class="input-group mb-0">
+                    <label class="label">Duration</label>
+                    <select [ngModel]="globalSlideshowDurationMs() / 1000" (ngModelChange)="updateGlobalSlideshowDuration(+$event)" class="select text-xs">
+                      @for(duration of slideshowDurationOptions; track duration) {
+                        <option [value]="duration">{{ duration }}s</option>
+                      }
+                    </select>
+                  </div>
+                </div>
+
+                @if(globalCollectionType() !== 'mixed' && globalCollectionEndpointValue() === 'discover/' + globalCollectionType()) {
+                  <div class="pt-2 border-t border-[#183352] space-y-2">
+                    <div class="input-group mb-0">
+                      <label class="label">Sort By</label>
+                      <select [ngModel]="getActiveGlobalDiscoverFilters().sortBy" (ngModelChange)="updateGlobalDiscoverFilter('sortBy', $event)" class="select text-xs">
+                        @for(opt of availableGlobalSortOptions(); track opt.key) {
+                          <option [value]="opt.key">{{ opt.name }}</option>
+                        }
+                      </select>
+                    </div>
+                    <div class="input-group mb-0">
+                      <label class="label">Year</label>
+                      <input type="number" placeholder="e.g. 2024" [ngModel]="getActiveGlobalDiscoverFilters().year" (ngModelChange)="updateGlobalDiscoverFilter('year', $event)" class="input text-xs">
+                    </div>
+                    <div class="input-group mb-0">
+                      <label class="label">Genres</label>
+                      <div class="h-24 overflow-y-auto bg-[#06121e] rounded border border-[#183352] p-2 space-y-1 custom-scrollbar">
+                        @for(genre of availableGlobalGenres(); track genre.id) {
+                          <label class="flex items-center space-x-2 text-xs cursor-pointer hover:text-white text-[#8eaec4] transition-colors">
+                            <input type="checkbox" [checked]="getActiveGlobalDiscoverFilters().genres.includes(genre.id)" (change)="toggleGlobalDiscoverGenre(genre.id, $any($event.target).checked)" class="rounded bg-[#0a1724] border-[#254261] text-[#01b4e4] focus:ring-[#01b4e4]">
+                            <span>{{ genre.name }}</span>
+                          </label>
+                        }
+                      </div>
+                    </div>
+                  </div>
+                }
               </div>
             </div>
 
@@ -198,12 +314,28 @@
                     <button (click)="addElement('tmdb-logo')" class="card-btn"><i class="fa-brands fa-imdb text-[#8eaec4]"></i><span>Logo</span></button>
                     <button (click)="addElement('tmdb-cast')" class="card-btn"><i class="fa-solid fa-user-group text-[#8eaec4]"></i><span>Cast</span></button>
                 </div>
-                
+
                  <button (click)="addElement('tmdb-dynamic-field')" class="btn btn-secondary w-full justify-start mt-2 border-[#01b4e4]/30 bg-[#01b4e4]/5 text-[#01b4e4]">
                     <i class="fa-solid fa-database"></i> Custom Dynamic Field
                 </button>
             </div>
-            
+
+            <!-- Static Elements -->
+            <div>
+              <div class="text-xs font-bold text-[#8eaec4] uppercase tracking-wider mb-3 px-1">Static Basics</div>
+              <div class="card-grid">
+                <button (click)="addElement('text')" class="card-btn">
+                    <i class="fa-solid fa-font text-[#01b4e4]"></i> <span>Text</span>
+                </button>
+                <button (click)="addElement('image')" class="card-btn">
+                    <i class="fa-regular fa-image text-[#90cea1]"></i> <span>Image</span>
+                </button>
+                <button (click)="addElement('shape')" class="card-btn">
+                    <i class="fa-solid fa-square text-white"></i> <span>Shape</span>
+                </button>
+              </div>
+            </div>
+
             <!-- Metadata -->
             <div>
                  <div class="text-xs font-bold text-[#8eaec4] uppercase tracking-wider mb-3 px-1">Metadata</div>
@@ -216,28 +348,18 @@
                  </div>
             </div>
 
-            <!-- Collections -->
-            <div>
-              <div class="text-xs font-bold text-[#8eaec4] uppercase tracking-wider mb-3 px-1">Collections</div>
-              <div class="space-y-2">
-                <button (click)="addElement('tmdb-poster-scroll', undefined, 'movie')" class="btn btn-secondary w-full justify-start"><i class="fa-solid fa-film text-[#01b4e4]"></i> Movie Poster Scroll</button>
-                <button (click)="addElement('tmdb-poster-scroll', undefined, 'tv')" class="btn btn-secondary w-full justify-start"><i class="fa-solid fa-tv text-[#01b4e4]"></i> TV Poster Scroll</button>
-                <button (click)="addElement('tmdb-backdrop-slideshow', undefined, 'movie')" class="btn btn-secondary w-full justify-start"><i class="fa-solid fa-images text-[#90cea1]"></i> Movie Slideshow</button>
-                <button (click)="addElement('tmdb-backdrop-slideshow', undefined, 'tv')" class="btn btn-secondary w-full justify-start"><i class="fa-solid fa-compact-disc text-[#90cea1]"></i> TV Slideshow</button>
-              </div>
-            </div>
-        </div>
-      }
+          </div>
+        }
     </div>
-    
+
     <div class="p-3 border-t border-[#183352] text-center text-xs text-[#64839e]">
-        Made with ❤️ by <a href="https://t.me/ianwoneill" target="_blank" class="text-[#01b4e4] hover:underline">Ian</a>
+        Made with ❤️ by <a href="https://t.me/ianwoneill" target="_blank" rel="noopener noreferrer" class="text-[#01b4e4] hover:underline">Ian</a> and<a href="https://t.me/schrodingerspussy" target="_blank" rel="noopener noreferrer" class="text-[#01b4e4] hover:underline">TheCat</a>
     </div>
   </aside>
 
   <!-- CENTER: CANVAS AREA -->
   <div class="flex-1 flex flex-col bg-[#0d253f] relative z-10 min-w-0">
-    
+
     <!-- Canvas Toolbar -->
     <div class="h-16 flex items-center justify-between px-6 border-b border-[#183352] bg-[#06121e] shrink-0 shadow-sm gap-4">
       <div class="flex items-center gap-4">
@@ -246,7 +368,21 @@
             <button (click)="changeCanvasMode('tablet', undefined)" class="p-2 rounded hover:bg-[#1b3a57] text-[#8eaec4] hover:text-white transition-colors" [class.bg-[#1b3a57]]="selectedPreset() === 'tablet'" [class.text-white]="selectedPreset() === 'tablet'" title="Tablet"><i class="fa-solid fa-tablet-screen-button"></i></button>
             <button (click)="changeCanvasMode('tv', undefined)" class="p-2 rounded hover:bg-[#1b3a57] text-[#8eaec4] hover:text-white transition-colors" [class.bg-[#1b3a57]]="selectedPreset() === 'tv'" [class.text-white]="selectedPreset() === 'tv'" title="TV"><i class="fa-solid fa-tv"></i></button>
         </div>
-        
+
+        <div class="h-6 w-px bg-[#183352]"></div>
+
+        <select
+            [ngModel]="selectedResolutionId()"
+            (ngModelChange)="changeCanvasResolution($event)"
+            class="canvas-resolution-select"
+            title="Canvas resolution preset">
+            @for(option of availableCanvasResolutions(); track option.id) {
+                <option [value]="option.id">
+                    {{ option.id === selectedResolutionId() ? canvasConfig().width : option.width }} × {{ option.id === selectedResolutionId() ? canvasConfig().height : option.height }} · {{ option.aspectRatio }} · {{ option.name }}
+                </option>
+            }
+        </select>
+
         <div class="h-6 w-px bg-[#183352]"></div>
 
         <div class="flex items-center gap-2 bg-[#0d253f] p-1 rounded-lg border border-[#183352]">
@@ -254,24 +390,18 @@
             <button (click)="changeCanvasMode(undefined, 'landscape')" class="p-2 rounded hover:bg-[#1b3a57] text-[#8eaec4] hover:text-white transition-colors" [class.bg-[#1b3a57]]="orientation() === 'landscape'" [class.text-white]="orientation() === 'landscape'" title="Landscape"><i class="fa-solid fa-image"></i></button>
         </div>
 
-        <div class="h-6 w-px bg-[#183352]"></div>
-        
-        <div class="flex items-center gap-2">
-            <i class="fa-solid fa-magnifying-glass text-xs text-[#64839e]"></i>
-            <input type="range" min="0.1" max="2" step="0.05" [ngModel]="zoomLevel()" (ngModelChange)="zoomLevel.set(+$event)" class="w-24 h-1 bg-[#183352] rounded appearance-none" title="Zoom">
-            <span class="text-[10px] w-8 text-[#8eaec4] font-mono">{{Math.round(zoomLevel() * 100)}}%</span>
-            <button (click)="fitCanvasToScreen()" class="text-xs text-[#01b4e4] hover:text-white px-2 py-1 rounded border border-[#01b4e4]/30 bg-[#01b4e4]/10">Fit</button>
-        </div>
-
-        <div class="text-xs text-[#64839e] font-mono ml-2 whitespace-nowrap">
-            {{canvasConfig().width}} &times; {{canvasConfig().height}}
-        </div>
       </div>
 
       <div class="flex items-center gap-3">
         <button (click)="undo()" [disabled]="historyIndex() <= 0" class="btn btn-ghost btn-icon rounded-full" title="Undo"><i class="fa-solid fa-rotate-left"></i></button>
         <button (click)="redo()" [disabled]="historyIndex() >= history().length - 1" class="btn btn-ghost btn-icon rounded-full" title="Redo"><i class="fa-solid fa-rotate-right"></i></button>
-        
+
+        <div class="h-6 w-px bg-[#183352] mx-2"></div>
+
+        <button (click)="exportProjectJson()" class="btn btn-ghost btn-icon rounded-full" title="Save project file"><i class="fa-solid fa-floppy-disk"></i></button>
+        <button (click)="toolbarProjectImportInput.click()" class="btn btn-ghost btn-icon rounded-full" title="Open project file"><i class="fa-solid fa-folder-open"></i></button>
+        <input #toolbarProjectImportInput type="file" accept=".json,.tmdb-layout,application/json" class="hidden" (change)="importProjectJson($event)">
+
         <div class="h-6 w-px bg-[#183352] mx-2"></div>
 
         <button (click)="previewMode.set(!previewMode())" class="btn" [class.btn-secondary]="!previewMode()" [class.btn-primary]="previewMode()">
@@ -279,17 +409,23 @@
         </button>
       </div>
     </div>
-    
+
     <!-- Canvas Viewport -->
-    <div id="canvas-bg" class="flex-1 overflow-auto flex flex-col items-center justify-center p-8 canvas-pattern relative bg-[#0d253f]" (click)="deselectCanvas($event)">
-      
-      <div 
-        id="canvas" 
-        class="bg-black shadow-2xl relative overflow-hidden ring-1 ring-[#06121e] transition-all duration-300 ease-out shrink-0" 
+    <div
+      id="canvas-bg"
+      class="flex-1 overflow-auto flex flex-col items-center justify-center p-8 canvas-pattern relative bg-[#0d253f]"
+      (click)="deselectCanvas($event)"
+      (wheel)="zoomCanvasWithWheel($event)"
+      (mousedown)="handleCanvasViewportMouseDown($event)"
+      (auxclick)="preventCanvasAuxClick($event)">
+
+      <div
+        id="canvas"
+        class="bg-black shadow-2xl relative overflow-hidden ring-1 ring-[#06121e] transition-all duration-300 ease-out shrink-0"
         [style.width.px]="canvasConfig().width" [style.height.px]="canvasConfig().height"
         [style.transform]="'scale(' + canvasConfig().scale + ')'"
         style="transform-origin: center center;">
-        
+
         @if(!previewMode() && elements().length === 0) {
             <div class="absolute inset-0 flex flex-col items-center justify-center text-[#254261] pointer-events-none">
                 <i class="fa-regular fa-square-plus text-6xl mb-4 opacity-20"></i>
@@ -302,80 +438,207 @@
             <div
               [id]="element.id"
               class="draggable-element group"
-              [class.ring-2]="selectedElementId() === element.id && !previewMode()"
-              [class.ring-[#01b4e4]]="selectedElementId() === element.id && !previewMode()"
-              [class.ring-offset-2]="selectedElementId() === element.id && !previewMode()"
-              [class.ring-offset-black]="selectedElementId() === element.id && !previewMode()"
+              [class.ring-2]="isElementSelected(element.id) && !previewMode()"
+              [class.ring-[#01b4e4]]="isElementSelected(element.id) && !previewMode()"
+              [class.ring-offset-2]="isElementSelected(element.id) && !previewMode()"
+              [class.ring-offset-black]="isElementSelected(element.id) && !previewMode()"
               [style.position]="'absolute'" [style.top.px]="element.y" [style.left.px]="element.x"
               [style.width.px]="element.width" [style.height.px]="element.height"
               [style.zIndex]="element.zIndex"
+              [style.--element-rotation]="element.rotation + 'deg'"
+              [style.animationDuration]="getElementTransitionDurationStyle(element)"
+              [style.animationDelay]="getElementTransitionDelayStyle(element)"
+              [style.animationTimingFunction]="getElementTransitionTimingFunction(element)"
+              [style.animationFillMode]="getElementTransitionFillMode(element)"
               [style.transform]="'rotate(' + element.rotation + 'deg)'"
+              [ngClass]="getElementTransitionClassMap(element)"
               [style.backgroundColor]="!element.styles.backgroundGradient ? hexToRgba(element.styles.backgroundColor, element.styles.backgroundOpacity ?? 1) : null"
               [style.backgroundImage]="element.styles.backgroundGradient ? 'linear-gradient(' + element.styles.backgroundGradient.angle + 'deg, ' + element.styles.backgroundGradient.from + ', ' + element.styles.backgroundGradient.to + ')' : null"
               [style.color]="element.styles.color" [style.fontFamily]="element.styles.fontFamily"
-              [style.fontSize.px]="element.styles.fontSize" [style.fontWeight]="element.styles.fontWeight"
-              [style.textAlign]="element.styles.textAlign" [style.borderRadius.px]="element.styles.borderRadius"
+              [style.fontSize]="formatElementFontSize(element)" [style.fontWeight]="element.styles.fontWeight"
+              [style.fontStyle]="element.styles.fontStyle || 'normal'"
+              [style.textDecoration]="element.styles.textDecoration || 'none'"
+              [style.lineHeight]="formatElementLineHeight(element)"
+              [style.textAlign]="getContentTextAlign(element)" [style.borderRadius.px]="element.styles.borderRadius"
               [style.borderWidth.px]="element.styles.borderWidth" [style.borderColor]="element.styles.borderColor"
+              [style.borderStyle]="element.styles.borderWidth > 0 ? 'solid' : 'none'"
               [style.opacity]="element.styles.opacity"
-              [style.boxShadow]="element.styles.boxShadow ? `${element.styles.boxShadow.x}px ${element.styles.boxShadow.y}px ${element.styles.boxShadow.blur}px ${element.styles.boxShadow.color}` : null"
-              [style.textShadow]="element.styles.textShadow ? `${element.styles.textShadow.x}px ${element.styles.textShadow.y}px ${element.styles.textShadow.blur}px ${element.styles.textShadow.color}` : null"
+              [style.boxShadow]="formatElementBoxShadow(element)"
               [style.backdropFilter]="(element.styles.filterBlur > 0 || element.styles.filterGrayscale > 0) ? 'blur(' + element.styles.filterBlur + 'px) grayscale(' + element.styles.filterGrayscale + ')' : null"
               [style.webkitBackdropFilter]="(element.styles.filterBlur > 0 || element.styles.filterGrayscale > 0) ? 'blur(' + element.styles.filterBlur + 'px) grayscale(' + element.styles.filterGrayscale + ')' : null"
               style="box-sizing: border-box; touch-action: none; display: flex; align-items: center; justify-content: center;"
-              (mousedown)="selectElement(element.id)"
+              (mousedown)="selectElementFromPointer($event, element.id)"
               (contextmenu)="openContextMenu($event, element.id)">
-              
-                @if (selectedElementId() === element.id && !previewMode()) {
+
+                @if (isElementSelected(element.id) && !previewMode() && canResizeElement(element)) {
                     <div class="absolute -right-1 -bottom-1 w-3 h-3 bg-white rounded-full z-50 cursor-se-resize shadow-sm"></div>
                 }
 
                 @switch (element.type) {
-                  @case ('text') { <div class="p-2 w-full h-full pointer-events-none whitespace-pre-wrap leading-normal">{{ element.content }}</div> }
-                  @case ('image') { <img [src]="element.content" class="w-full h-full pointer-events-none" [style.object-fit]="element.imageFit" [style.borderRadius.px]="element.styles.borderRadius"> }
-                  
+                  @case ('text') {
+                    <div class="p-2 w-full h-full pointer-events-none whitespace-pre-wrap flex flex-col"
+                         [style.justifyContent]="getContentVerticalFlex(element)"
+                         [style.textAlign]="getContentTextAlign(element)"
+                         [style.textShadow]="formatContentTextShadow(element)"
+                         [ngStyle]="getContentTextStrokeStyles(element)">{{ element.content }}</div>
+                  }
+                  @case ('image') {
+                    <img [src]="element.content" class="w-full h-full pointer-events-none content-media"
+                         [style.object-fit]="element.imageFit"
+                         [style.object-position]="getContentObjectPosition(element)"
+                         [style.borderRadius.px]="element.styles.borderRadius"
+                         [style.border]="formatContentMediaBorder(element)"
+                         [style.boxShadow]="formatContentMediaBoxShadow(element)"
+                         [style.filter]="formatContentDropShadow(element)">
+                  }
+
                   @case ('tmdb-dynamic-field') {
-                      <div class="p-2 w-full h-full pointer-events-none whitespace-pre-wrap leading-normal flex flex-col justify-center">
+                      <div class="p-2 w-full h-full pointer-events-none whitespace-pre-wrap flex flex-col"
+                           [style.justifyContent]="getContentVerticalFlex(element)"
+                           [style.textAlign]="getContentTextAlign(element)"
+                           [style.textShadow]="formatContentTextShadow(element)"
+                           [ngStyle]="getContentTextStrokeStyles(element)">
                           @if (element.tmdbData) {
                               {{ element.dataPrefix }}{{ resolveDataPath(element.tmdbData, element.dataPath || '') }}{{ element.dataSuffix }}
                           } @else {
-                              <span class="opacity-50 text-xs italic">{{ element.dataPath || 'Select Data Path' }}</span>
+                              <span class="opacity-50 italic">{{ element.dataPath || 'Select Data Path' }}</span>
                           }
                       </div>
                   }
 
-                  @case ('tmdb-poster') { @if (element.tmdbData?.poster_path) { <img [src]="'https://image.tmdb.org/t/p/w500' + element.tmdbData.poster_path" class="w-full h-full pointer-events-none" [style.object-fit]="element.imageFit"> } @else { <div class="w-full h-full flex items-center justify-center bg-[#183352] text-[#64839e]"><i class="fa-solid fa-ticket text-4xl"></i></div> } }
-                  @case ('tmdb-backdrop') { @if (element.tmdbData?.backdrop_path) { <img [src]="'https://image.tmdb.org/t/p/w1280' + element.tmdbData.backdrop_path" class="w-full h-full pointer-events-none" [style.object-fit]="element.imageFit"> } @else { <div class="w-full h-full flex items-center justify-center bg-[#183352] text-[#64839e]"><i class="fa-solid fa-image text-4xl"></i></div> } }
-                  @case ('tmdb-logo') { @if (getBestLogo(element)) { <img [src]="getBestLogo(element)" class="w-full h-full p-2 pointer-events-none" [style.object-fit]="element.imageFit"> } @else { <div class="w-full h-full flex items-center justify-center border-2 border-dashed border-[#254261] text-[#64839e]"><span class="font-bold text-xl">LOGO</span></div> } }
-                  @case ('tmdb-title') { <div class="p-2 w-full h-full pointer-events-none leading-tight">{{ element.tmdbData?.title || element.tmdbData?.name || 'Movie Title' }}</div> }
-                  @case ('tmdb-overview') { <div class="p-2 text-xs overflow-hidden h-full w-full pointer-events-none">{{ element.tmdbData?.overview || 'Overview text placeholder...' }}</div> }
-                  @case ('tmdb-tagline') { <div class="p-2 text-sm italic opacity-80 w-full h-full pointer-events-none">{{ element.tmdbData?.tagline || 'Tagline goes here...' }}</div> }
-                  @case ('tmdb-release-date') { <div class="p-2 w-full h-full pointer-events-none">{{ element.tmdbData?.release_date || element.tmdbData?.first_air_date || '2024-01-01' }}</div> }
-                  @case ('tmdb-runtime') { <div class="p-2 w-full h-full pointer-events-none">{{ (element.tmdbData?.runtime ?? element.tmdbData?.episode_run_time?.[0]) ? (element.tmdbData.runtime ?? element.tmdbData.episode_run_time[0]) + ' min' : '120 min' }}</div> }
-                  @case ('tmdb-season-episode-count') { <div class="p-2 w-full h-full flex items-center justify-center pointer-events-none">{{ element.tmdbData?.number_of_seasons ? element.tmdbData.number_of_seasons + ' Seasons' : 'Seasons / Episodes' }}</div> }
-                  @case ('tmdb-network-logo') { @if (getBestNetworkLogo(element)) { <img [src]="getBestNetworkLogo(element)" class="w-full h-full p-2 pointer-events-none" [style.object-fit]="element.imageFit"> } @else { <div class="w-full h-full flex items-center justify-center bg-white/10"><i class="fa-solid fa-tv text-2xl"></i></div> } }
-                  @case ('tmdb-rating') { <div class="p-2 text-lg text-yellow-400 pointer-events-none"> @if(element.tmdbData?.vote_average){ @for(i of [].constructor(Math.round(element.tmdbData.vote_average/2)); track i){<span>★</span>} @for(i of [].constructor(5 - Math.round(element.tmdbData.vote_average/2)); track i){<span class="opacity-30">★</span>} } @else { <span>★★★★☆</span> } </div> }
-                  @case ('tmdb-genres') { <div class="p-2 flex flex-wrap gap-2 items-center justify-center pointer-events-none"> @if(element.tmdbData?.genres) { @for(genre of element.tmdbData.genres; track genre.id) { <span class="genre-pill">{{genre.name}}</span> } } @else { <span class="genre-pill">Action</span><span class="genre-pill">Drama</span> } </div> }
-                  @case ('tmdb-poster-scroll') { 
-                    <div class="w-full h-full flex items-center overflow-x-hidden p-2 gap-3 pointer-events-none">
+                  @case ('tmdb-poster') { @if (element.tmdbData?.poster_path) { <img [src]="'https://image.tmdb.org/t/p/w500' + element.tmdbData.poster_path" class="w-full h-full pointer-events-none content-media" [style.object-fit]="element.imageFit" [style.object-position]="getContentObjectPosition(element)" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentMediaBoxShadow(element)" [style.filter]="formatContentDropShadow(element)"> } @else { <div class="w-full h-full flex items-center justify-center bg-[#183352] text-[#64839e]"><i class="fa-solid fa-ticket text-4xl"></i></div> } }
+                  @case ('tmdb-backdrop') {
+                    @if (getBackdropSlideshowStateForElement(element); as backdropState) {
+                      <div class="absolute inset-0 overflow-hidden pointer-events-none content-media"
+                           [style.border]="formatContentMediaBorder(element)"
+                           [style.boxShadow]="formatContentMediaBoxShadow(element)"
+                           [style.filter]="formatContentDropShadow(element)">
+                        <div class="absolute inset-0 pointer-events-none backdrop-slideshow-underlay"
+                             [style.zIndex]="1"
+                             [style.backgroundSize]="getBackdropFrameBackgroundSize(element)"
+                             [style.backgroundPosition]="getContentObjectPosition(element)"
+                             [style.backgroundImage]="getSlideshowFrameBackgroundImage(backdropState, 'underlay')"
+                             [style.transition]="backdropState.resetting ? 'none' : getSlideshowFrameTransition(element)"
+                             [style.opacity]="getSlideshowUnderlayFrameOpacity(element, backdropState)"
+                             [style.transform]="getSlideshowUnderlayFrameTransform(element, backdropState)"
+                             [style.filter]="getSlideshowUnderlayFrameFilter(element, backdropState)"></div>
+                        <div class="absolute inset-0 pointer-events-none will-change-transform backdrop-slideshow-current"
+                             [class.backdrop-slideshow-resetting]="backdropState.resetting"
+                             [style.zIndex]="2"
+                             [style.backgroundSize]="getBackdropFrameBackgroundSize(element)"
+                             [style.backgroundPosition]="getContentObjectPosition(element)"
+                             [style.backgroundImage]="getSlideshowFrameBackgroundImage(backdropState, 'current')"
+                             [style.transition]="backdropState.resetting ? 'none' : getSlideshowFrameTransition(element)"
+                             [style.opacity]="getSlideshowCurrentFrameOpacity(element, backdropState.fade)"
+                             [style.transform]="getSlideshowCurrentFrameTransform(element, backdropState.fade)"
+                             [style.filter]="getSlideshowCurrentFrameFilter(element, backdropState.fade)"></div>
+                      </div>
+                    } @else if (getDynamicBackdropTransitionState(element); as backdropTransition) {
+                      <div class="absolute inset-0 overflow-hidden pointer-events-none content-media"
+                           [style.border]="formatContentMediaBorder(element)"
+                           [style.boxShadow]="formatContentMediaBoxShadow(element)"
+                           [style.filter]="formatContentDropShadow(element)">
+                        <div class="absolute inset-0 pointer-events-none backdrop-slideshow-underlay"
+                             [style.zIndex]="1"
+                             [style.backgroundSize]="getBackdropFrameBackgroundSize(element)"
+                             [style.backgroundPosition]="getContentObjectPosition(element)"
+                             [style.backgroundImage]="getBackdropUrlBackgroundImage(backdropTransition.underlayUrl)"
+                             [style.transition]="backdropTransition.resetting ? 'none' : getSlideshowFrameTransition(element)"
+                             [style.opacity]="getSlideshowUnderlayFrameOpacity(element, backdropTransition)"
+                             [style.transform]="getSlideshowUnderlayFrameTransform(element, backdropTransition)"
+                             [style.filter]="getSlideshowUnderlayFrameFilter(element, backdropTransition)"></div>
+                        <div class="absolute inset-0 pointer-events-none will-change-transform backdrop-slideshow-current"
+                             [class.backdrop-slideshow-resetting]="backdropTransition.resetting"
+                             [style.zIndex]="2"
+                             [style.backgroundSize]="getBackdropFrameBackgroundSize(element)"
+                             [style.backgroundPosition]="getContentObjectPosition(element)"
+                             [style.backgroundImage]="getBackdropUrlBackgroundImage(backdropTransition.currentUrl)"
+                             [style.transition]="backdropTransition.resetting ? 'none' : getSlideshowFrameTransition(element)"
+                             [style.opacity]="getSlideshowCurrentFrameOpacity(element, backdropTransition.fade)"
+                             [style.transform]="getSlideshowCurrentFrameTransform(element, backdropTransition.fade)"
+                             [style.filter]="getSlideshowCurrentFrameFilter(element, backdropTransition.fade)"></div>
+                      </div>
+                    } @else if (element.tmdbData?.backdrop_path) {
+                      <img [src]="'https://image.tmdb.org/t/p/w1280' + element.tmdbData.backdrop_path" class="w-full h-full pointer-events-none content-media" [style.object-fit]="element.imageFit" [style.object-position]="getContentObjectPosition(element)" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentMediaBoxShadow(element)" [style.filter]="formatContentDropShadow(element)">
+                    } @else {
+                      <div class="w-full h-full flex items-center justify-center bg-[#183352] text-[#64839e]"><i class="fa-solid fa-image text-4xl"></i></div>
+                    }
+                  }
+                  @case ('tmdb-logo') { @if (getBestLogo(element)) { <img [src]="getBestLogo(element)" class="w-full h-full p-2 pointer-events-none content-media" [style.object-fit]="element.imageFit" [style.object-position]="getContentObjectPosition(element)" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentMediaBoxShadow(element)" [style.filter]="formatContentDropShadow(element)"> } @else { <div class="p-2 w-full h-full pointer-events-none whitespace-pre-wrap flex flex-col font-bold" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{ getLogoFallbackTitle(element) }}</div> } }
+                  @case ('tmdb-title') { <div class="p-2 w-full h-full pointer-events-none flex flex-col" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{ element.tmdbData?.title || element.tmdbData?.name || 'Movie Title' }}</div> }
+                  @case ('tmdb-overview') { <div class="p-2 overflow-hidden h-full w-full pointer-events-none flex flex-col" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{ element.tmdbData?.overview || 'Overview text placeholder...' }}</div> }
+                  @case ('tmdb-tagline') { <div class="p-2 opacity-80 w-full h-full pointer-events-none flex flex-col" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{ element.tmdbData?.tagline || 'Tagline goes here...' }}</div> }
+                  @case ('tmdb-release-date') { <div class="p-2 w-full h-full pointer-events-none flex flex-col" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{ element.tmdbData?.release_date || element.tmdbData?.first_air_date || '2024-01-01' }}</div> }
+                  @case ('tmdb-runtime') { <div class="p-2 w-full h-full pointer-events-none flex flex-col" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{ (element.tmdbData?.runtime ?? element.tmdbData?.episode_run_time?.[0]) ? (element.tmdbData.runtime ?? element.tmdbData.episode_run_time[0]) + ' min' : '120 min' }}</div> }
+                  @case ('tmdb-season-episode-count') { <div class="p-2 w-full h-full flex flex-col pointer-events-none" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{ element.tmdbData?.number_of_seasons ? element.tmdbData.number_of_seasons + ' Seasons' : 'Seasons / Episodes' }}</div> }
+                  @case ('tmdb-network-logo') { @if (getBestNetworkLogo(element)) { <img [src]="getBestNetworkLogo(element)" class="w-full h-full p-2 pointer-events-none content-media" [style.object-fit]="element.imageFit" [style.object-position]="getContentObjectPosition(element)" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentMediaBoxShadow(element)" [style.filter]="formatContentDropShadow(element)"> } @else { <div class="p-2 w-full h-full pointer-events-none whitespace-pre-wrap flex flex-col font-bold" [style.justifyContent]="getContentVerticalFlex(element)" [style.textAlign]="getContentTextAlign(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{ getLogoFallbackTitle(element) }}</div> } }
+                  @case ('tmdb-rating') { <div class="p-2 text-yellow-400 pointer-events-none w-full h-full flex" [style.justifyContent]="getContentJustifyContent(element)" [style.alignItems]="getContentAlignItems(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)"> @if(element.tmdbData?.vote_average){ @for(i of [].constructor(Math.round(element.tmdbData.vote_average/2)); track i){<span>★</span>} @for(i of [].constructor(5 - Math.round(element.tmdbData.vote_average/2)); track i){<span class="opacity-30">★</span>} } @else { <span>★★★★☆</span> } </div> }
+                  @case ('tmdb-genres') { <div class="p-2 flex flex-wrap gap-2 pointer-events-none w-full h-full" [style.justifyContent]="getContentJustifyContent(element)" [style.alignItems]="getContentAlignItems(element)"> @if(element.tmdbData?.genres) { @for(genre of element.tmdbData.genres; track genre.id) { <span class="genre-pill" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentBoxShadow(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">{{genre.name}}</span> } } @else { <span class="genre-pill" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentBoxShadow(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">Action</span><span class="genre-pill" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentBoxShadow(element)" [style.textShadow]="formatContentTextShadow(element)" [ngStyle]="getContentTextStrokeStyles(element)">Drama</span> } </div> }
+                  @case ('tmdb-poster-scroll') {
+                    <div class="w-full h-full flex overflow-x-hidden p-2 gap-3 pointer-events-none"
+                         [style.justifyContent]="getContentJustifyContent(element)"
+                         [style.alignItems]="getContentAlignItems(element)">
                       <div class="poster-scroll-container flex gap-3 h-full">
-                        @if (element.tmdbData?.results) { 
-                            @for(item of element.tmdbData.results.slice(0,10); track item.id) { 
-                                @if(item.poster_path) { 
-                                    <img [src]="'https://image.tmdb.org/t/p/w500' + item.poster_path" class="h-full w-auto inline-block rounded shadow-lg"> 
-                                } 
-                            } 
-                        } @else { 
-                            <div class="flex gap-2 opacity-50"><div class="h-32 w-20 bg-[#183352] rounded"></div><div class="h-32 w-20 bg-[#183352] rounded"></div><div class="h-32 w-20 bg-[#183352] rounded"></div></div> 
+                        @if (element.tmdbData?.results) {
+                            @for(item of getPosterScrollItems(element); track item.id) {
+                                <img [src]="'https://image.tmdb.org/t/p/w500' + item.poster_path" class="h-full w-auto inline-block rounded content-media" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentMediaBoxShadow(element)" [style.filter]="formatContentDropShadow(element)">
+                            }
+                        } @else {
+                            <div class="flex gap-2 opacity-50"><div class="h-32 w-20 bg-[#183352] rounded"></div><div class="h-32 w-20 bg-[#183352] rounded"></div><div class="h-32 w-20 bg-[#183352] rounded"></div></div>
                         }
                       </div>
-                    </div> 
+                    </div>
                   }
-                  @case ('tmdb-cast') { <div class="w-full h-full flex items-start overflow-hidden p-2 gap-4 text-center text-xs pointer-events-none"> @if (element.tmdbData?.credits?.cast) { @for(actor of element.tmdbData.credits.cast.slice(0, 5); track actor.id) { @if(actor.profile_path) { <div class="flex flex-col items-center w-16 shrink-0"> <img [src]="'https://image.tmdb.org/t/p/w500' + actor.profile_path" class="w-12 h-12 object-cover rounded-full mb-1 shadow-md border border-white/10"> <span class="truncate w-full opacity-80">{{actor.name}}</span> </div> } } } @else { <div class="flex gap-4 opacity-50"><div class="w-12 h-12 rounded-full bg-[#183352]"></div><div class="w-12 h-12 rounded-full bg-[#183352]"></div></div> } </div> }
+                  @case ('tmdb-cast') {
+                    <div class="w-full h-full flex overflow-hidden p-2 gap-4 text-center pointer-events-none"
+                         [style.justifyContent]="getContentJustifyContent(element)"
+                         [style.alignItems]="getContentAlignItems(element)">
+                      @if (getVisibleCast(element).length) {
+                        @for(actor of getVisibleCast(element); track actor.id) {
+                          <div class="flex flex-col items-center shrink-0" [style.width.px]="getCastItemWidth(element)">
+                            <img [src]="'https://image.tmdb.org/t/p/w500' + actor.profile_path"
+                                 class="object-cover rounded-full mb-1"
+                                 [style.width.px]="getCastBubbleSize(element)"
+                                 [style.height.px]="getCastBubbleSize(element)"
+                                 [style.border]="formatContentMediaBorder(element)"
+                                 [style.boxShadow]="formatContentMediaBoxShadow(element)"
+                                 [style.filter]="formatContentDropShadow(element)">
+                            <span class="truncate w-full opacity-80"
+                                  [style.textShadow]="formatContentTextShadow(element)"
+                                  [ngStyle]="getContentTextStrokeStyles(element)">{{actor.name}}</span>
+                          </div>
+                        }
+                      } @else {
+                        <div class="flex gap-4 opacity-50" [style.justifyContent]="getContentJustifyContent(element)" [style.alignItems]="getContentAlignItems(element)">
+                          <div class="rounded-full bg-[#183352]" [style.width.px]="getCastBubbleSize(element)" [style.height.px]="getCastBubbleSize(element)" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentMediaBoxShadow(element)" [style.filter]="formatContentDropShadow(element)"></div>
+                          <div class="rounded-full bg-[#183352]" [style.width.px]="getCastBubbleSize(element)" [style.height.px]="getCastBubbleSize(element)" [style.border]="formatContentMediaBorder(element)" [style.boxShadow]="formatContentMediaBoxShadow(element)" [style.filter]="formatContentDropShadow(element)"></div>
+                        </div>
+                      }
+                    </div>
+                  }
                   @case ('tmdb-backdrop-slideshow') {
                       @if (slideshowState()[element.id]?.backdrops.length) {
                           @let state = slideshowState()[element.id];
-                          <div class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 pointer-events-none" [style.backgroundImage]="'url(' + state.backdrops[state.idx1] + ')'" [class.opacity-100]="!state.fade" [class.opacity-0]="state.fade"></div>
-                          <div class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 pointer-events-none" [style.backgroundImage]="'url(' + state.backdrops[state.idx2] + ')'" [class.opacity-0]="!state.fade" [class.opacity-100]="state.fade"></div>
+                          <div class="absolute inset-0 overflow-hidden pointer-events-none"
+                               [style.border]="formatContentMediaBorder(element)"
+                               [style.boxShadow]="formatContentMediaBoxShadow(element)"
+                               [style.filter]="formatContentDropShadow(element)">
+                            <div class="absolute inset-0 bg-cover bg-center pointer-events-none backdrop-slideshow-underlay"
+                                 [style.zIndex]="1"
+                                 [style.backgroundImage]="getSlideshowFrameBackgroundImage(state, 'underlay')"
+                                 [style.transition]="state.resetting ? 'none' : getSlideshowFrameTransition(element)"
+                                 [style.opacity]="getSlideshowUnderlayFrameOpacity(element, state)"
+                                 [style.transform]="getSlideshowUnderlayFrameTransform(element, state)"
+                                 [style.filter]="getSlideshowUnderlayFrameFilter(element, state)"></div>
+                            <div class="absolute inset-0 bg-cover bg-center pointer-events-none will-change-transform backdrop-slideshow-current"
+                                 [class.backdrop-slideshow-resetting]="state.resetting"
+                                 [style.zIndex]="2"
+                                 [style.backgroundImage]="getSlideshowFrameBackgroundImage(state, 'current')"
+                                 [style.transition]="state.resetting ? 'none' : getSlideshowFrameTransition(element)"
+                                 [style.opacity]="getSlideshowCurrentFrameOpacity(element, state.fade)"
+                                 [style.transform]="getSlideshowCurrentFrameTransform(element, state.fade)"
+                                 [style.filter]="getSlideshowCurrentFrameFilter(element, state.fade)"></div>
+                          </div>
                       } @else {
                           <div class="w-full h-full flex items-center justify-center bg-[#183352] text-[#64839e]"><i class="fa-solid fa-play-circle text-4xl"></i></div>
                       }
@@ -385,13 +648,20 @@
           }
         }
       </div>
+
+      <div class="zoom-overlay absolute right-5 bottom-5 z-30 flex items-center gap-2" (click)="$event.stopPropagation()" title="Canvas zoom">
+          <i class="fa-solid fa-magnifying-glass text-xs text-[#8eaec4]"></i>
+          <input type="range" min="0.1" max="2" step="0.05" [ngModel]="zoomLevel()" (ngModelChange)="setCanvasZoom(+$event)" title="Zoom">
+          <span class="text-[10px] w-8 text-[#8eaec4] font-mono">{{Math.round(zoomLevel() * 100)}}%</span>
+          <button (click)="fitCanvasToScreen()" class="zoom-fit-button" title="Fit canvas to available viewport space. Double-click the mouse wheel in the viewport for the same action.">Fit</button>
+      </div>
     </div>
   </div>
 
   <!-- RIGHT SIDEBAR -->
   <aside class="w-80 bg-[#06121e] border-l border-[#183352] flex flex-col shrink-0 z-20 shadow-xl">
     <div class="tab-group pt-2 border-b border-[#183352]">
-      <button (click)="activeRightPanelTab.set('properties')" [disabled]="!selectedElement()" class="tab" [class.active]="activeRightPanelTab() === 'properties'">
+      <button (click)="activeRightPanelTab.set('properties')" [disabled]="!selectedElement() && selectedElementIds().length === 0" class="tab" [class.active]="activeRightPanelTab() === 'properties'">
         <i class="fa-solid fa-sliders"></i> Properties
       </button>
       <button (click)="activeRightPanelTab.set('layers')" class="tab" [class.active]="activeRightPanelTab() === 'layers'">
@@ -408,49 +678,114 @@
                 @if(elements().length === 0) {
                     <div class="text-center text-[#64839e] py-8 text-xs">No layers yet.</div>
                 }
-                
-                <div class="text-[10px] text-[#64839e] mb-2 px-2"><i class="fa-solid fa-info-circle mr-1"></i> Drag a layer onto another to group/link them.</div>
-                
-                @for (element of elements().slice().reverse(); track element.id) {
-                    <div 
-                        draggable="true"
-                        (dragstart)="onLayerDragStart($event, element.id)"
-                        (dragover)="onLayerDragOver($event, element.id)"
-                        (dragleave)="onLayerDragLeave($event)"
-                        (drop)="onLayerDrop($event, element.id)"
-                        (click)="selectElement(element.id)" 
-                        class="layer-item group transition-all duration-200" 
-                        [class.selected]="selectedElementId() === element.id"
-                        [class.drag-over]="dragOverLayerId() === element.id">
-                        
-                        <div class="flex items-center gap-2 overflow-hidden flex-1">
-                            <i class="fa-solid text-xs w-4 text-center text-[#8eaec4]" 
-                               [class.fa-font]="element.type === 'text'" 
-                               [class.fa-image]="element.type.includes('image') || element.type.includes('poster') || element.type.includes('backdrop')"
-                               [class.fa-square]="element.type === 'shape'"
-                               [class.fa-database]="element.type === 'tmdb-dynamic-field'"></i>
-                            
-                            <div class="flex flex-col min-w-0">
-                                <span class="truncate font-medium leading-tight">{{ formatTypeName(element.type) }}</span>
-                                @if (element.linkGroup) {
-                                    <div class="flex items-center gap-1 mt-0.5">
-                                        <span class="text-[9px] bg-[#01b4e4]/20 text-[#01b4e4] px-1 py-0.5 rounded border border-[#01b4e4]/30 flex items-center gap-1">
-                                            <i class="fa-solid fa-link text-[8px]"></i>
-                                            {{element.linkGroup.replace('group_', 'Group ')}}
-                                        </span>
-                                        <button (click)="unlinkElement(element.id, $event)" class="text-[#64839e] hover:text-red-400 px-1" title="Unlink"><i class="fa-solid fa-unlink text-[9px]"></i></button>
+
+                <div class="text-[10px] text-[#64839e] mb-2 px-2"><i class="fa-solid fa-info-circle mr-1"></i> Drag layers to reorder them. Right-click for layer controls.</div>
+
+                @for (item of getLayerTreeItems(); track getLayerTreeItemTrack(item)) {
+                    @if (item.kind === 'group') {
+                        <div
+                            (click)="selectLayerGroup(item.groupId, $event)"
+                            (contextmenu)="openLayerGroupContextMenu($event, item.groupId)"
+                            class="layer-item group transition-all duration-200"
+                            [class.selected]="isLayerGroupSelected(item.groupId)">
+                            <div class="flex items-center gap-2 overflow-hidden flex-1">
+                                <button (click)="toggleLayerGroupCollapsed(item.groupId, $event)" class="text-[#8eaec4] hover:text-white w-4 text-center">
+                                    <i class="fa-solid fa-chevron-down text-[10px] transition-transform" [class.-rotate-90]="isLayerGroupCollapsed(item.groupId)"></i>
+                                </button>
+                                <i class="fa-solid fa-folder-tree text-xs w-4 text-center text-[#01b4e4]"></i>
+                                <input
+                                    [ngModel]="getLayerGroupName(item.groupId)"
+                                    (ngModelChange)="updateLayerGroupName(item.groupId, $event)"
+                                    (click)="selectLayerGroup(item.groupId); $event.stopPropagation()"
+                                    (focus)="selectLayerGroup(item.groupId)"
+                                    (mousedown)="$event.stopPropagation()"
+                                    class="min-w-0 flex-1 bg-transparent border border-transparent focus:border-[#01b4e4]/50 rounded px-1 py-0.5 text-xs font-semibold text-[#d8edf8] outline-none">
+                            </div>
+                            <span class="text-[10px] text-[#64839e]">{{ item.elements.length }}</span>
+                        </div>
+
+                        @if (!isLayerGroupCollapsed(item.groupId)) {
+                            @for (element of item.elements; track element.id) {
+                                <div
+                                    draggable="true"
+                                    (dragstart)="onLayerDragStart($event, element.id)"
+                                    (dragend)="onLayerDragEnd()"
+                                    (dragover)="onLayerDragOver($event, element.id)"
+                                    (dragleave)="onLayerDragLeave($event)"
+                                    (drop)="onLayerDrop($event, element.id)"
+                                    (contextmenu)="openLayerContextMenu($event, element.id)"
+                                    (click)="selectLayerElement(element.id, $event)"
+                                    class="layer-item layer-item-child group transition-all duration-200"
+                                    [class.selected]="selectedElementId() === element.id && !selectedLayerGroupId()"
+                                    [class.drag-over]="dragOverLayerId() === element.id">
+                                    <div class="flex items-center gap-2 overflow-hidden flex-1">
+                                        <i class="fa-solid text-xs w-4 text-center text-[#8eaec4]"
+                                           [class.fa-font]="element.type === 'text'"
+                                           [class.fa-image]="element.type.includes('image') || element.type.includes('poster') || element.type.includes('backdrop')"
+                                           [class.fa-square]="element.type === 'shape'"
+                                           [class.fa-database]="element.type === 'tmdb-dynamic-field'"></i>
+                                        <div class="flex flex-col min-w-0">
+                                            <span class="truncate font-medium leading-tight">{{ formatTypeName(element.type) }}</span>
+                                            @if (element.linkGroup) {
+                                                <div class="flex items-center gap-1 mt-0.5">
+                                                    <span class="text-[9px] bg-[#01b4e4]/20 text-[#01b4e4] px-1 py-0.5 rounded border border-[#01b4e4]/30 flex items-center gap-1">
+                                                        <i class="fa-solid fa-link text-[8px]"></i>
+                                                        {{element.linkGroup.replace('group_', 'Group ')}}
+                                                    </span>
+                                                    <button (click)="unlinkElement(element.id, $event)" class="text-[#64839e] hover:text-red-400 px-1" title="Unlink"><i class="fa-solid fa-unlink text-[9px]"></i></button>
+                                                </div>
+                                            }
+                                        </div>
                                     </div>
-                                }
+                                    <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button (click)="deleteElement(element.id); $event.stopPropagation()" class="p-1 text-[#64839e] hover:text-red-400"><i class="fa-solid fa-trash text-xs"></i></button>
+                                        <button (click)="toggleVisibility(element.id); $event.stopPropagation()" class="p-1 text-[#64839e] hover:text-white">
+                                            <i class="fa-solid fa-fw text-xs" [class.fa-eye]="element.visible" [class.fa-eye-slash]="!element.visible"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    } @else {
+                        <div
+                            draggable="true"
+                            (dragstart)="onLayerDragStart($event, item.element.id)"
+                            (dragend)="onLayerDragEnd()"
+                            (dragover)="onLayerDragOver($event, item.element.id)"
+                            (dragleave)="onLayerDragLeave($event)"
+                            (drop)="onLayerDrop($event, item.element.id)"
+                            (contextmenu)="openLayerContextMenu($event, item.element.id)"
+                            (click)="selectLayerElement(item.element.id, $event)"
+                            class="layer-item group transition-all duration-200"
+                            [class.selected]="isElementSelected(item.element.id)"
+                            [class.drag-over]="dragOverLayerId() === item.element.id">
+                            <div class="flex items-center gap-2 overflow-hidden flex-1">
+                                <i class="fa-solid text-xs w-4 text-center text-[#8eaec4]"
+                                   [class.fa-font]="item.element.type === 'text'"
+                                   [class.fa-image]="item.element.type.includes('image') || item.element.type.includes('poster') || item.element.type.includes('backdrop')"
+                                   [class.fa-square]="item.element.type === 'shape'"
+                                   [class.fa-database]="item.element.type === 'tmdb-dynamic-field'"></i>
+                                <div class="flex flex-col min-w-0">
+                                    <span class="truncate font-medium leading-tight">{{ formatTypeName(item.element.type) }}</span>
+                                    @if (item.element.linkGroup) {
+                                        <div class="flex items-center gap-1 mt-0.5">
+                                            <span class="text-[9px] bg-[#01b4e4]/20 text-[#01b4e4] px-1 py-0.5 rounded border border-[#01b4e4]/30 flex items-center gap-1">
+                                                <i class="fa-solid fa-link text-[8px]"></i>
+                                                {{item.element.linkGroup.replace('group_', 'Group ')}}
+                                            </span>
+                                            <button (click)="unlinkElement(item.element.id, $event)" class="text-[#64839e] hover:text-red-400 px-1" title="Unlink"><i class="fa-solid fa-unlink text-[9px]"></i></button>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button (click)="deleteElement(item.element.id); $event.stopPropagation()" class="p-1 text-[#64839e] hover:text-red-400"><i class="fa-solid fa-trash text-xs"></i></button>
+                                <button (click)="toggleVisibility(item.element.id); $event.stopPropagation()" class="p-1 text-[#64839e] hover:text-white">
+                                    <i class="fa-solid fa-fw text-xs" [class.fa-eye]="item.element.visible" [class.fa-eye-slash]="!item.element.visible"></i>
+                                </button>
                             </div>
                         </div>
-                        
-                        <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                             <button (click)="deleteElement(element.id); $event.stopPropagation()" class="p-1 text-[#64839e] hover:text-red-400"><i class="fa-solid fa-trash text-xs"></i></button>
-                            <button (click)="toggleVisibility(element.id); $event.stopPropagation()" class="p-1 text-[#64839e] hover:text-white">
-                                <i class="fa-solid fa-fw text-xs" [class.fa-eye]="element.visible" [class.fa-eye-slash]="!element.visible"></i>
-                            </button>
-                        </div>
-                    </div>
+                    }
                 }
             </div>
         }
@@ -461,131 +796,60 @@
                 <h3 class="text-[#01b4e4] font-semibold mb-1">Ready to Publish?</h3>
                 <p class="text-xs text-[#8eaec4]">Download a standalone PHP file containing your layout and logic. Upload to any server to view.</p>
             </div>
-            
+
+            <div class="grid grid-cols-2 gap-2">
+                <button (click)="exportProjectJson()" class="btn btn-secondary w-full">
+                    <i class="fa-solid fa-floppy-disk"></i> Save Project
+                </button>
+                <button (click)="projectImportInput.click()" class="btn btn-secondary w-full">
+                    <i class="fa-solid fa-folder-open"></i> Open Project
+                </button>
+                <input #projectImportInput type="file" accept=".json,.tmdb-layout,application/json" class="hidden" (change)="importProjectJson($event)">
+            </div>
+
             <div class="flex-1 relative bg-[#0a1724] rounded-lg border border-[#183352] overflow-hidden group">
                 <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button class="text-xs bg-[#183352] text-white px-2 py-1 rounded border border-[#254261]">Copy</button>
+                    <button (click)="copyGeneratedPhpCode()" class="text-xs bg-[#183352] text-white px-2 py-1 rounded border border-[#254261]">
+                        {{ copySuccess() ? 'Copied' : 'Copy' }}
+                    </button>
                 </div>
                 <pre class="p-4 text-[10px] text-slate-300 font-mono overflow-auto h-full custom-scrollbar">{{ generatedPhpCode() }}</pre>
             </div>
-            
+
             <button (click)="downloadPhpFile()" class="btn btn-primary w-full py-3">
                 <i class="fa-solid fa-download"></i> Download .php File
             </button>
           </div>
         }
 
-        @if (activeRightPanelTab() === 'properties' && selectedElement(); as el) {
+        @if (activeRightPanelTab() === 'properties' && hasMultiSelection()) {
+            <div class="bg-[#06121e]">
+              <div class="panel-header">
+                <span class="panel-title">Selection</span>
+                <button (click)="clearMultiSelection()" class="text-[#64839e] hover:text-red-500 transition-colors"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+              <div class="p-4 border-b border-[#183352] space-y-3">
+                  <div class="p-3 bg-[#0a1724] rounded border border-[#254261]">
+                      <div class="text-xs text-[#8eaec4] font-semibold">{{ selectedElementIds().length }} elements selected</div>
+                  </div>
+                  <button (click)="groupSelectedLayers()" class="btn btn-primary w-full">
+                      <i class="fa-solid fa-object-group"></i> Group Layers
+                  </button>
+                  <button (click)="clearMultiSelection()" class="btn btn-secondary w-full">
+                      <i class="fa-solid fa-xmark"></i> Clear Selection
+                  </button>
+              </div>
+            </div>
+        } @else if (activeRightPanelTab() === 'properties' && selectedElement(); as el) {
             <div class="bg-[#06121e]">
               <div class="panel-header">
                 <span class="panel-title">{{ formatTypeName(el.type) }} Settings</span>
                 <button (click)="deleteElement(el.id)" class="text-[#64839e] hover:text-red-500 transition-colors"><i class="fa-solid fa-trash-can"></i></button>
               </div>
-              
-              <!-- TMDB CONFIGURATION -->
-              @if (el.type.startsWith('tmdb-')) {
-                <details class="accordion" open>
-                  <summary>TMDB Data Source</summary>
-                  <div class="accordion-content space-y-4">
-                    @if(el.type.includes('scroll') || el.type.includes('slideshow')) {
-                      <div class="input-group">
-                        <label class="label">Collection Type</label>
-                        <div class="flex bg-[#0a1724] rounded p-1 border border-[#254261]">
-                             <button (click)="updateElementProperty('tmdbCollectionType', 'movie'); fetchTmdbDataForElement(el.id)" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-[#01b4e4]]="el.tmdbCollectionType === 'movie'" [class.text-[#0d253f]]="el.tmdbCollectionType === 'movie'" [class.text-[#8eaec4]]="el.tmdbCollectionType !== 'movie'">Movies</button>
-                             <button (click)="updateElementProperty('tmdbCollectionType', 'tv'); fetchTmdbDataForElement(el.id)" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-[#01b4e4]]="el.tmdbCollectionType === 'tv'" [class.text-[#0d253f]]="el.tmdbCollectionType === 'tv'" [class.text-[#8eaec4]]="el.tmdbCollectionType !== 'tv'">TV</button>
-                        </div>
-                      </div>
-                      <div class="input-group">
-                          <label class="label">Endpoint</label>
-                          <select [ngModel]="el.tmdbEndpoint" (ngModelChange)="updateElementProperty('tmdbEndpoint', $event); fetchTmdbDataForElement(el.id)" class="select" [disabled]="!el.tmdbCollectionType">
-                            @for(endpoint of availableCollectionEndpoints(); track endpoint.key) { <option [value]="endpoint.key">{{ endpoint.name }}</option> }
-                          </select>
-                      </div>
-                      
-                      @if(el.tmdbEndpoint?.startsWith('discover')) {
-                        <div class="p-3 bg-[#0a1724] rounded border border-[#254261] mt-2">
-                           <div class="label mb-2 text-[#01b4e4]">Discover Filters</div>
-                           <div class="input-group">
-                               <label class="label">Sort By</label>
-                               <select [ngModel]="el.discoverFilters.sortBy" (ngModelChange)="updateDiscoverFilter('sortBy', $event); fetchTmdbDataForElement(el.id)" class="select text-xs"> 
-                                   @for(opt of availableSortOptions(); track opt.key){ <option [value]="opt.key">{{opt.name}}</option> } 
-                               </select>
-                           </div>
-                           <div class="input-group">
-                               <label class="label">Year</label>
-                               <input type="number" placeholder="e.g. 2024" [ngModel]="el.discoverFilters.year" (ngModelChange)="updateDiscoverFilter('year', +$event); fetchTmdbDataForElement(el.id)" class="input text-xs">
-                           </div>
-                           <div class="input-group mb-0">
-                               <label class="label">Genres</label>
-                              <div class="h-24 overflow-y-auto bg-[#06121e] rounded border border-[#183352] p-2 space-y-1 custom-scrollbar">
-                                @for(genre of availableGenres(); track genre.id) {
-                                  <label class="flex items-center space-x-2 text-xs cursor-pointer hover:text-white text-[#8eaec4] transition-colors">
-                                      <input type="checkbox" [checked]="el.discoverFilters.genres.includes(genre.id)" (change)="$event.target.checked ? el.discoverFilters.genres.push(genre.id) : el.discoverFilters.genres.splice(el.discoverFilters.genres.indexOf(genre.id), 1); fetchTmdbDataForElement(el.id)" class="rounded bg-[#0a1724] border-[#254261] text-[#01b4e4] focus:ring-[#01b4e4]">
-                                      <span>{{genre.name}}</span>
-                                  </label>
-                                }
-                              </div>
-                           </div>
-                        </div>
-                      }
-                    } @else {
-                        <!-- Single Item Selection -->
-                         <div class="input-group">
-                             <label class="label flex justify-between items-center">
-                                 Link Group ID
-                                 <span class="text-[10px] font-normal text-[#01b4e4]" title="Elements with same ID share content">?</span>
-                             </label>
-                             <input type="text" [ngModel]="el.linkGroup" (ngModelChange)="updateElementProperty('linkGroup', $event)" class="input" placeholder="e.g. hero-section">
-                             <p class="text-[10px] text-[#64839e] mt-1">Drag layers onto each other to link them automatically.</p>
-                         </div>
 
-                        <div class="input-group">
-                          <label class="label">Media Type</label>
-                          <div class="flex bg-[#0a1724] rounded p-1 border border-[#254261]">
-                             <button (click)="updateElementProperty('tmdbItemType', 'movie')" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-[#01b4e4]]="el.tmdbItemType === 'movie'" [class.text-[#0d253f]]="el.tmdbItemType === 'movie'" [class.text-[#8eaec4]]="el.tmdbItemType !== 'movie'">Movie</button>
-                             <button (click)="updateElementProperty('tmdbItemType', 'tv')" class="flex-1 py-1 text-xs rounded transition-colors" [class.bg-[#01b4e4]]="el.tmdbItemType === 'tv'" [class.text-[#0d253f]]="el.tmdbItemType === 'tv'" [class.text-[#8eaec4]]="el.tmdbItemType !== 'tv'">TV Show</button>
-                          </div>
-                        </div>
-                        
-                        <div class="input-group relative">
-                          <label class="label">Quick Search</label>
-                          <div class="relative">
-                              <input type="text" #searchInput (keyup)="searchTmdb(searchInput.value)" placeholder="Type movie name..." class="input pl-10">
-                              <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[#64839e] text-xs"></i>
-                          </div>
-                          
-                          @if (isSearching()) { <div class="absolute right-2 top-8 text-xs text-[#64839e]"><i class="fa-solid fa-spinner fa-spin"></i></div> }
-                          
-                          @if(tmdbSearchResults().length > 0) {
-                            <div class="absolute z-50 w-full bg-[#0a1724] border border-[#254261] rounded-lg mt-1 max-h-64 overflow-y-auto shadow-2xl custom-scrollbar">
-                              @for(item of tmdbSearchResults(); track item.id) {
-                                <button (click)="selectTmdbItem(item); searchInput.value = ''" class="w-full text-left p-2 hover:bg-[#01b4e4]/20 hover:border-l-2 hover:border-[#01b4e4] flex items-start gap-3 border-b border-[#183352] last:border-0 transition-all">
-                                  <img [src]="'https://image.tmdb.org/t/p/w92' + (item.poster_path || item.profile_path)" class="w-8 h-12 object-cover rounded bg-[#183352] shrink-0">
-                                  <div class="min-w-0">
-                                      <p class="font-semibold text-slate-200 truncate text-xs">{{ item.title || item.name }}</p>
-                                      <p class="text-[10px] text-[#64839e]">{{ item.release_date || item.first_air_date | slice:0:4 }}</p>
-                                  </div>
-                                </button>
-                              }
-                            </div>
-                          }
-                        </div>
-
-                        <div class="input-group">
-                            <label class="label">Manual ID</label>
-                            <div class="flex gap-2">
-                                <input type="text" [ngModel]="el.tmdbId" (ngModelChange)="updateElementProperty('tmdbId', $event)" class="input font-mono text-xs" placeholder="ID">
-                                <button (click)="fetchTmdbDataForElement(el.id)" class="btn btn-secondary px-3" title="Refresh Data"><i class="fa-solid fa-sync"></i></button>
-                            </div>
-                        </div>
-                    }
-                  </div>
-                </details>
-              }
-              
               <!-- DYNAMIC FIELD PROPERTIES -->
               @if(el.type === 'tmdb-dynamic-field') {
-                <details class="accordion" open>
+                <details class="accordion">
                     <summary class="text-[#01b4e4]">Data Binding</summary>
                     <div class="accordion-content space-y-3">
                         <div class="input-group">
@@ -611,23 +875,155 @@
               }
 
               <!-- Content Specific -->
-              @if(el.type === 'text') { 
+              @if(el.type === 'text') {
                   <div class="p-4 border-b border-[#183352]">
                       <label class="label">Text Content</label>
                       <textarea [ngModel]="el.content" (ngModelChange)="updateElementProperty('content', $event)" rows="3" class="textarea resize-y"></textarea>
                   </div>
               }
-              @if(el.type === 'image') { 
+              @if(el.type === 'image') {
                   <div class="p-4 border-b border-[#183352]">
                       <label class="label">Image Source URL</label>
                       <input type="text" [ngModel]="el.content" (ngModelChange)="updateElementProperty('content', $event)" class="input text-xs">
-                  </div> 
+                  </div>
+              }
+              @if(el.type === 'tmdb-cast') {
+                  <div class="p-4 border-b border-[#183352] space-y-3">
+                      <div>
+                        <label class="label flex justify-between items-center">
+                          Cast Shown
+                          <span class="text-[10px] font-normal text-[#8eaec4]">{{ getCastCount(el) }}</span>
+                        </label>
+                        <select [ngModel]="getCastCount(el)" (ngModelChange)="updateCastCount(el.id, +$event)" class="select text-xs">
+                          @for(count of castCountOptions; track count) {
+                            <option [value]="count">{{ count }} actor{{ count === 1 ? '' : 's' }}</option>
+                          }
+                        </select>
+                      </div>
+                      <label class="label">Cast Bubble Size</label>
+                      <select [ngModel]="getCastBubbleSize(el)" (ngModelChange)="updateCastBubbleSize(el.id, +$event)" class="select text-xs">
+                        @for(size of castBubbleSizeOptions; track size) {
+                          <option [value]="size">{{ size }} px</option>
+                        }
+                      </select>
+                      <input type="range" min="20" max="200" step="1" [ngModel]="getCastBubbleSize(el)" (ngModelChange)="updateCastBubbleSize(el.id, +$event)">
+                  </div>
+              }
+
+              @if(el.layoutGroupId) {
+                <details class="accordion">
+                  <summary>Layout Group</summary>
+                  <div class="accordion-content space-y-3">
+                    <div class="p-3 bg-[#0a1724] rounded border border-[#254261]">
+                      <div class="text-xs text-[#8eaec4] font-semibold">
+                        {{ getLayoutGroupMemberCount(el) }} grouped element{{ getLayoutGroupMemberCount(el) === 1 ? '' : 's' }}
+                      </div>
+                      <div class="text-[10px] text-[#64839e] mt-1">
+                        {{ getLayoutGroupLockState(el) ? 'Locked: moving a grouped item moves the whole group.' : 'Unlocked: grouped items can be moved and resized individually.' }}
+                      </div>
+                    </div>
+
+                    <button (click)="setLayoutGroupLocked(el.id, !getLayoutGroupLockState(el))" class="btn btn-secondary w-full">
+                      <i class="fa-solid" [class.fa-lock-open]="getLayoutGroupLockState(el)" [class.fa-lock]="!getLayoutGroupLockState(el)"></i>
+                      {{ getLayoutGroupLockState(el) ? 'Unlock Group' : 'Lock Group' }}
+                    </button>
+
+                    @if(!hasLayoutGroupBackground(el)) {
+                      <button (click)="addBackgroundToGroup(el.id)" class="btn btn-secondary w-full">
+                        <i class="fa-solid fa-square"></i> Add Background To Group
+                      </button>
+                    }
+
+                    @if(hasLayoutGroupBackground(el)) {
+                      <button (click)="fitGroupBackgroundToMembers(el.id)" class="btn btn-secondary w-full">
+                        <i class="fa-solid fa-up-right-and-down-left-from-center"></i> Fit Background To Contents
+                      </button>
+                    }
+
+                    <button (click)="ungroupLayoutGroup(el.id)" class="btn btn-secondary w-full">
+                      <i class="fa-solid fa-object-ungroup"></i> Ungroup Layers
+                    </button>
+                  </div>
+                </details>
               }
 
               <!-- LAYOUT -->
-              <details class="accordion" open>
+              <details class="accordion">
                 <summary>Layout & Position</summary>
                 <div class="accordion-content">
+                  @if(el.type.startsWith('tmdb-')) {
+                    <div class="mb-4 p-3 bg-[#0a1724] rounded border border-[#254261] space-y-3">
+                        <label class="flex items-center justify-between gap-3 text-xs text-[#8eaec4] cursor-pointer">
+                            <span class="label mb-0">Snap to Grid</span>
+                            <input type="checkbox" [ngModel]="!!el.snapToGrid" (ngModelChange)="toggleSnapToGrid(el.id, $event)" class="rounded bg-[#0a1724] border-[#254261] text-[#01b4e4] focus:ring-[#01b4e4]">
+                        </label>
+                        <div>
+                            <label class="label">Snap Increment</label>
+                            <select [ngModel]="el.snapIncrement || 20" (ngModelChange)="updateElementProperty('snapIncrement', +$event)" class="select text-xs">
+                                @for(increment of snapIncrementOptions; track increment) {
+                                    <option [value]="increment">{{ increment }} px</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                  }
+
+                  @if(el.type === 'tmdb-poster') {
+                    <div class="mb-4 p-3 bg-[#0a1724] rounded border border-[#254261]">
+                        <label class="flex items-center justify-between gap-3 text-xs text-[#8eaec4] cursor-pointer">
+                            <span class="label mb-0">Maintain Aspect Ratio</span>
+                            <input type="checkbox" [ngModel]="el.maintainAspectRatio !== false" (ngModelChange)="updatePosterAspectRatio(el.id, $event)" class="rounded bg-[#0a1724] border-[#254261] text-[#01b4e4] focus:ring-[#01b4e4]">
+                        </label>
+                    </div>
+                  }
+
+                  @if(['tmdb-backdrop', 'tmdb-backdrop-slideshow'].includes(el.type)) {
+                    <div class="mb-4 p-3 bg-[#0a1724] rounded border border-[#254261]">
+                        <label class="label">Backdrop Fit</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button (click)="fitBackdropToCanvas(el.id, 'width')" class="btn btn-secondary px-2 py-1 text-xs" title="Fill canvas width and preserve 16:9">Fill Width</button>
+                            <button (click)="fitBackdropToCanvas(el.id, 'height')" class="btn btn-secondary px-2 py-1 text-xs" title="Fill canvas height and preserve 16:9">Fill Height</button>
+                            <button (click)="fitBackdropToCanvas(el.id, 'cover')" class="btn btn-secondary px-2 py-1 text-xs" title="Cover the canvas and preserve 16:9">Cover Canvas</button>
+                        </div>
+                    </div>
+                  }
+
+                  <div class="mb-4 p-3 bg-[#0a1724] rounded border border-[#254261] space-y-3">
+                    <div>
+                      <label class="label">Lock Relative To</label>
+                      <select [ngModel]="el.relativeToElementId || ''" (ngModelChange)="updateRelativeLayout(el.id, 'relativeToElementId', $event)" class="select text-xs">
+                        <option value="">Not locked</option>
+                        @for(option of getRelativeTargetOptions(el); track option.id) {
+                          <option [value]="option.id">{{ formatTypeName(option.type) }} · {{ option.id.replace('el_', 'Layer ') }}</option>
+                        }
+                      </select>
+                    </div>
+
+                    @if(el.relativeToElementId) {
+                      <div class="grid grid-cols-2 gap-2">
+                        <div>
+                          <label class="label">Side</label>
+                          <select [ngModel]="el.relativeSide || 'right'" (ngModelChange)="updateRelativeLayout(el.id, 'relativeSide', $event)" class="select text-xs">
+                            @for(side of relativeSideOptions; track side.value) {
+                              <option [value]="side.value">{{ side.label }}</option>
+                            }
+                          </select>
+                        </div>
+                        <div>
+                          <label class="label">Gap</label>
+                          <input type="number" min="0" [ngModel]="el.relativeGap ?? 12" (ngModelChange)="updateRelativeLayout(el.id, 'relativeGap', +$event)" class="input">
+                        </div>
+                      </div>
+                      <label class="flex items-center justify-between gap-3 text-xs text-[#8eaec4] cursor-pointer">
+                        <span class="label mb-0">Match Cross Size</span>
+                        <input type="checkbox" [ngModel]="!!el.relativeMatchSize" (ngModelChange)="updateRelativeLayout(el.id, 'relativeMatchSize', $event)" class="rounded bg-[#0a1724] border-[#254261] text-[#01b4e4] focus:ring-[#01b4e4]">
+                      </label>
+                      <button (click)="clearRelativeLayout(el.id)" class="btn btn-secondary w-full text-xs py-1">
+                        <i class="fa-solid fa-unlink"></i> Clear Relative Lock
+                      </button>
+                    }
+                  </div>
+
                   <div class="grid grid-cols-2 gap-3 mb-3">
                     <div><label class="label">X Position</label><input type="number" [ngModel]="el.x" (ngModelChange)="updateElementProperty('x', +$event)" class="input"></div>
                     <div><label class="label">Y Position</label><input type="number" [ngModel]="el.y" (ngModelChange)="updateElementProperty('y', +$event)" class="input"></div>
@@ -648,12 +1044,52 @@
                   </div>
                 </div>
               </details>
-              
+
+              <!-- TRANSITIONS -->
+              <details class="accordion">
+                <summary>Transitions</summary>
+                <div class="accordion-content space-y-3">
+                  <div>
+                    <label class="label">Effect</label>
+                    <select [ngModel]="getEffectiveTransitionEffect(el)" (ngModelChange)="updateTransitionSetting(el.id, 'transitionEffect', $event)" class="select text-xs">
+                      @for(effect of transitionEffectOptions; track effect.value) {
+                        <option [value]="effect.value">{{ effect.label }}</option>
+                      }
+                    </select>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-2">
+                    <div>
+                      <label class="label">Duration</label>
+                      <select [ngModel]="getEffectiveTransitionDurationMs(el)" (ngModelChange)="updateTransitionSetting(el.id, 'transitionDurationMs', +$event)" class="select text-xs">
+                        @for(duration of transitionDurationOptions; track duration) {
+                          <option [value]="duration">{{ duration }} ms</option>
+                        }
+                      </select>
+                    </div>
+                    <div>
+                      <label class="label">Delay</label>
+                      <select [ngModel]="getEffectiveTransitionDelayMs(el)" (ngModelChange)="updateTransitionSetting(el.id, 'transitionDelayMs', +$event)" class="select text-xs">
+                        @for(delay of transitionDelayOptions; track delay) {
+                          <option [value]="delay">{{ delay }} ms</option>
+                        }
+                      </select>
+                    </div>
+                  </div>
+
+                  @if(getTransitionTimingWarning(el); as warning) {
+                    <div class="text-[10px] leading-snug text-amber-200 bg-amber-500/10 border border-amber-400/30 rounded px-2 py-1">
+                      {{ warning }}
+                    </div>
+                  }
+                </div>
+              </details>
+
               <!-- APPEARANCE (Includes Image Fit) -->
-              <details class="accordion" open>
+              <details class="accordion">
                 <summary>Appearance</summary>
                 <div class="accordion-content space-y-4">
-                 
+
                  <!-- Image Scaling Control -->
                  @if(['image', 'tmdb-poster', 'tmdb-backdrop', 'tmdb-logo', 'tmdb-network-logo'].includes(el.type)) {
                      <div>
@@ -666,13 +1102,38 @@
                      </div>
                  }
 
+                 @if(el.type !== 'shape') {
+                   <div class="p-3 bg-[#0a1724] rounded border border-[#254261] space-y-3">
+                      <div>
+                        <label class="label">Content Horizontal Align</label>
+                        <div class="flex bg-[#06121e] rounded border border-[#254261] p-1">
+                          @for(option of contentAlignXOptions; track option.value) {
+                            <button (click)="updateElementStyle('contentAlignX', option.value)" class="flex-1 py-1 rounded text-[#64839e] hover:text-white hover:bg-[#183352] transition-colors" [class.text-[#01b4e4]]="getContentTextAlign(el) === option.value" [title]="option.label">
+                              <i class="fa-solid {{option.icon}}"></i>
+                            </button>
+                          }
+                        </div>
+                      </div>
+                      <div>
+                        <label class="label">Content Vertical Align</label>
+                        <div class="flex bg-[#06121e] rounded border border-[#254261] p-1">
+                          @for(option of contentAlignYOptions; track option.value) {
+                            <button (click)="updateElementStyle('contentAlignY', option.value)" class="flex-1 py-1 rounded text-[#64839e] hover:text-white hover:bg-[#183352] transition-colors" [class.text-[#01b4e4]]="getContentVerticalAlign(el) === option.value" [title]="option.label">
+                              <i class="fa-solid {{option.icon}}"></i>
+                            </button>
+                          }
+                        </div>
+                      </div>
+                   </div>
+                 }
+
                  <div>
                     <label class="label">Background Color</label>
                     <div class="flex items-center gap-2 mb-2">
                         <input type="color" [ngModel]="el.styles.backgroundColor" (ngModelChange)="updateElementStyle('backgroundColor', $event)" class="w-8 h-8 rounded bg-transparent cursor-pointer border-none p-0">
                         <input type="text" [ngModel]="el.styles.backgroundColor" (ngModelChange)="updateElementStyle('backgroundColor', $event)" class="input text-xs uppercase">
                     </div>
-                    
+
                     <div class="flex justify-between mb-1"><label class="label text-[10px]">BG Opacity: {{Math.round((el.styles.backgroundOpacity ?? 1) * 100)}}%</label></div>
                     <input type="range" min="0" max="1" step="0.01" [ngModel]="el.styles.backgroundOpacity ?? 1" (ngModelChange)="updateElementStyle('backgroundOpacity', +$event)">
                  </div>
@@ -686,7 +1147,87 @@
                      <div class="flex justify-between mb-1"><label class="label">Border Radius: {{el.styles.borderRadius}}px</label></div>
                      <input type="range" min="0" max="100" [ngModel]="el.styles.borderRadius" (ngModelChange)="updateElementStyle('borderRadius', +$event)">
                  </div>
-                 
+
+                 <div>
+                    <label class="label">Box Stroke</label>
+                    <div class="grid grid-cols-[1fr_auto] gap-2 items-center">
+                        <input type="number" min="0" [ngModel]="el.styles.borderWidth" (ngModelChange)="updateElementStyle('borderWidth', +$event)" class="input" placeholder="0">
+                        <span class="text-xs text-[#64839e]">px</span>
+                    </div>
+                    <div class="flex items-center gap-2 mt-2">
+                        <input type="color" [ngModel]="el.styles.borderColor" (ngModelChange)="updateElementStyle('borderColor', $event)" class="w-8 h-8 rounded bg-transparent cursor-pointer border-none p-0">
+                        <input type="text" [ngModel]="el.styles.borderColor" (ngModelChange)="updateElementStyle('borderColor', $event)" class="input text-xs uppercase">
+                    </div>
+                 </div>
+
+                 <div class="p-3 bg-[#0a1724] rounded border border-[#254261] space-y-3">
+                    <label class="flex items-center justify-between gap-3 text-xs text-[#8eaec4] cursor-pointer">
+                        <span class="label mb-0">Box Shadow</span>
+                        <input type="checkbox" [ngModel]="!!el.styles.boxShadow" (ngModelChange)="toggleBoxShadow(el.id, $event)" class="rounded bg-[#0a1724] border-[#254261] text-[#01b4e4] focus:ring-[#01b4e4]">
+                    </label>
+                    @if(el.styles.boxShadow) {
+                      <div class="grid grid-cols-3 gap-2">
+                        <div><label class="label">X</label><input type="number" [ngModel]="el.styles.boxShadow.x" (ngModelChange)="updateBoxShadowProperty(el.id, 'x', +$event)" class="input"></div>
+                        <div><label class="label">Y</label><input type="number" [ngModel]="el.styles.boxShadow.y" (ngModelChange)="updateBoxShadowProperty(el.id, 'y', +$event)" class="input"></div>
+                        <div><label class="label">Blur</label><input type="number" min="0" [ngModel]="el.styles.boxShadow.blur" (ngModelChange)="updateBoxShadowProperty(el.id, 'blur', +$event)" class="input"></div>
+                      </div>
+                      <div>
+                        <label class="label">Shadow Color</label>
+                        <div class="flex items-center gap-2">
+                          <input type="color" [ngModel]="el.styles.boxShadow.color" (ngModelChange)="updateBoxShadowProperty(el.id, 'color', $event)" class="w-8 h-8 rounded bg-transparent cursor-pointer border-none p-0">
+                          <input type="text" [ngModel]="el.styles.boxShadow.color" (ngModelChange)="updateBoxShadowProperty(el.id, 'color', $event)" class="input text-xs uppercase">
+                        </div>
+                      </div>
+                    }
+                 </div>
+
+                 @if(el.type !== 'shape') {
+                   <div class="p-3 bg-[#0a1724] rounded border border-[#254261] space-y-3">
+                      <label class="flex items-center justify-between gap-3 text-xs text-[#8eaec4] cursor-pointer">
+                          <span class="label mb-0">Content Stroke</span>
+                          <input type="checkbox" [ngModel]="isContentStrokeEnabled(el)" (ngModelChange)="toggleContentStroke(el.id, $event)" class="rounded bg-[#0a1724] border-[#254261] text-[#01b4e4] focus:ring-[#01b4e4]">
+                      </label>
+                      @if(isContentStrokeEnabled(el)) {
+                        <div class="flex gap-2">
+                          <input type="number" min="0" step="0.1" [ngModel]="el.styles.contentStrokeWidth ?? el.styles.textStrokeWidth ?? 0" (ngModelChange)="updateElementStyle('contentStrokeWidth', +$event)" class="input">
+                          <select [ngModel]="el.styles.contentStrokeUnit || el.styles.textStrokeUnit || 'px'" (ngModelChange)="updateElementStyle('contentStrokeUnit', $event)" class="select w-20 px-2">
+                            @for(unit of fontSizeUnits; track unit) { <option [value]="unit">{{unit}}</option> }
+                          </select>
+                        </div>
+                        <div>
+                          <label class="label">Position</label>
+                          <select [ngModel]="getContentStrokePosition(el)" (ngModelChange)="updateElementStyle('contentStrokePosition', $event)" class="select text-xs">
+                            <option value="outside">Outside</option>
+                            <option value="inside">Inside</option>
+                          </select>
+                        </div>
+                        <div class="flex items-center gap-2 mt-2">
+                          <input type="color" [ngModel]="el.styles.contentStrokeColor || el.styles.textStrokeColor || '#000000'" (ngModelChange)="updateElementStyle('contentStrokeColor', $event)" class="w-8 h-8 rounded bg-transparent cursor-pointer border-none p-0">
+                          <input type="text" [ngModel]="el.styles.contentStrokeColor || el.styles.textStrokeColor || '#000000'" (ngModelChange)="updateElementStyle('contentStrokeColor', $event)" class="input text-xs uppercase">
+                        </div>
+                      }
+
+                      <label class="flex items-center justify-between gap-3 text-xs text-[#8eaec4] cursor-pointer">
+                          <span class="label mb-0">Content Shadow</span>
+                          <input type="checkbox" [ngModel]="!!el.styles.contentShadow" (ngModelChange)="toggleContentShadow(el.id, $event)" class="rounded bg-[#0a1724] border-[#254261] text-[#01b4e4] focus:ring-[#01b4e4]">
+                      </label>
+                      @if(el.styles.contentShadow) {
+                        <div class="grid grid-cols-3 gap-2">
+                          <div><label class="label">X</label><input type="number" [ngModel]="el.styles.contentShadow.x" (ngModelChange)="updateContentShadowProperty(el.id, 'x', +$event)" class="input"></div>
+                          <div><label class="label">Y</label><input type="number" [ngModel]="el.styles.contentShadow.y" (ngModelChange)="updateContentShadowProperty(el.id, 'y', +$event)" class="input"></div>
+                          <div><label class="label">Blur</label><input type="number" min="0" [ngModel]="el.styles.contentShadow.blur" (ngModelChange)="updateContentShadowProperty(el.id, 'blur', +$event)" class="input"></div>
+                        </div>
+                        <div>
+                          <label class="label">Shadow Color</label>
+                          <div class="flex items-center gap-2">
+                            <input type="color" [ngModel]="el.styles.contentShadow.color" (ngModelChange)="updateContentShadowProperty(el.id, 'color', $event)" class="w-8 h-8 rounded bg-transparent cursor-pointer border-none p-0">
+                            <input type="text" [ngModel]="el.styles.contentShadow.color" (ngModelChange)="updateContentShadowProperty(el.id, 'color', $event)" class="input text-xs uppercase">
+                          </div>
+                        </div>
+                      }
+                   </div>
+                 }
+
                  <div>
                     <div class="flex justify-between mb-1"><label class="label">Blur Filter: {{el.styles.filterBlur}}px</label></div>
                     <input type="range" min="0" max="20" [ngModel]="el.styles.filterBlur" (ngModelChange)="updateElementStyle('filterBlur', +$event)">
@@ -704,8 +1245,34 @@
                       <div class="col-span-2"><label class="label">Font Family</label><select [ngModel]="el.styles.fontFamily" (ngModelChange)="updateElementStyle('fontFamily', $event)" class="select"> @for(font of fonts; track font){ <option [value]="font">{{font}}</option> } </select></div>
                   </div>
                   <div class="grid grid-cols-2 gap-3">
-                    <div><label class="label">Size (px)</label><input type="number" [ngModel]="el.styles.fontSize" (ngModelChange)="updateElementStyle('fontSize', +$event)" class="input"></div>
+                    <div>
+                      <label class="label">Size</label>
+                      <div class="flex gap-2">
+                        <input type="number" min="0.1" step="0.1" [ngModel]="el.styles.fontSize" (ngModelChange)="updateElementStyle('fontSize', +$event)" class="input">
+                        <select [ngModel]="el.styles.fontSizeUnit || 'pt'" (ngModelChange)="updateElementStyle('fontSizeUnit', $event)" class="select w-20 px-2">
+                          @for(unit of fontSizeUnits; track unit) { <option [value]="unit">{{unit}}</option> }
+                        </select>
+                      </div>
+                    </div>
                     <div><label class="label">Weight</label><select [ngModel]="el.styles.fontWeight" (ngModelChange)="updateElementStyle('fontWeight', $event)" class="select"><option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option></select></div>
+                  </div>
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <label class="label">Line Spacing</label>
+                      <div class="flex gap-2">
+                        <input type="number" min="0.1" step="0.1" [ngModel]="el.styles.lineHeight ?? 1.2" (ngModelChange)="updateElementStyle('lineHeight', +$event)" class="input">
+                        <select [ngModel]="el.styles.lineHeightUnit || 'em'" (ngModelChange)="updateElementStyle('lineHeightUnit', $event)" class="select w-20 px-2">
+                          @for(unit of fontSizeUnits; track unit) { <option [value]="unit">{{unit}}</option> }
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label class="label">Style</label>
+                      <div class="flex bg-[#0a1724] rounded border border-[#254261] p-1">
+                        <button (click)="updateElementStyle('fontStyle', el.styles.fontStyle === 'italic' ? 'normal' : 'italic')" class="flex-1 py-1 rounded text-[#64839e] hover:text-white hover:bg-[#183352] transition-colors" [class.text-[#01b4e4]]="el.styles.fontStyle === 'italic'" title="Italic"><i class="fa-solid fa-italic"></i></button>
+                        <button (click)="updateElementStyle('textDecoration', el.styles.textDecoration === 'underline' ? 'none' : 'underline')" class="flex-1 py-1 rounded text-[#64839e] hover:text-white hover:bg-[#183352] transition-colors" [class.text-[#01b4e4]]="el.styles.textDecoration === 'underline'" title="Underline"><i class="fa-solid fa-underline"></i></button>
+                      </div>
+                    </div>
                   </div>
                   <div>
                       <label class="label">Alignment</label>
