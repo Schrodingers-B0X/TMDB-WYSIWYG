@@ -535,6 +535,10 @@ input[type=range]::-moz-range-thumb {
   color: var(--text-muted);
   border: 1px solid transparent;
 }
+.layer-item-child {
+  margin-left: 1.25rem;
+  padding-left: 0.625rem;
+}
 .layer-item:hover {
   background-color: var(--bg-surface);
   color: var(--text-main);

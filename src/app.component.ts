@@ -39,6 +39,9 @@ type TransitionEffect = 'none' | 'fade' | 'slide-left' | 'slide-right' | 'slide-
 type SlideshowState = {idx1: number, idx2: number, fade: boolean, resetting?: boolean, sceneFade: boolean, backdrops: string[], items: any[]};
 type DynamicBackdropTransitionState = { currentUrl: string; underlayUrl: string; fade: boolean; resetting?: boolean; version: number };
 type TmdbDetailEntry = { key: string; altKey: string; detail: any };
+type LayerTreeItem =
+  | { kind: 'group'; groupId: string; elements: CanvasElement[] }
+  | { kind: 'element'; element: CanvasElement };
 
 interface CanvasResolutionPreset {
   id: string;
@@ -98,6 +101,7 @@ interface CanvasElement {
   maintainAspectRatio?: boolean;
   layoutGroupId?: string;
   layoutGroupRole?: LayoutGroupRole;
+  groupName?: string;
   groupLocked?: boolean;
   groupPadding?: number;
   groupTransitionEnabled?: boolean;
@@ -121,6 +125,7 @@ interface HistoryState {
   elements: CanvasElement[];
   selectedElementId: string | null;
   selectedElementIds?: string[];
+  selectedLayerGroupId?: string | null;
   multiSelectMode?: boolean;
   globalCollectionType?: TmdbCollectionType;
   globalCollectionEndpoints?: Record<TmdbCollectionType, string>;
@@ -157,6 +162,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   private globalSlideshowFetchSequence = 0;
   private globalSlideshowRunToken = 0;
   private globalSlideshowApplySequence = 0;
+  private globalSlideshowTargetIds = new Set<string>();
   private searchTerms = new Subject<string>();
   private authCheckSubject = new Subject<void>();
   private destroy$ = new Subject<void>();
@@ -190,7 +196,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     { value: 'tv', label: 'TV Shows' },
     { value: 'mixed', label: 'Movies + TV' }
   ];
-  readonly fontSizeUnits: FontSizeUnit[] = ['px', 'pt', 'em', 'rem'];
+  readonly fontSizeUnits: FontSizeUnit[] = ['pt', 'px', 'em', 'rem'];
   readonly relativeSideOptions: Array<{ value: RelativeSide; label: string }> = [
     { value: 'right', label: 'Right of' },
     { value: 'left', label: 'Left of' },
@@ -332,6 +338,8 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   globalSlideshowData = signal<any | null>(null);
   transitionVersions = signal<{[id: string]: number}>({});
   dynamicBackdropTransitions = signal<{[id: string]: DynamicBackdropTransitionState}>({});
+  selectedLayerGroupId = signal<string | null>(null);
+  collapsedLayerGroupIds = signal<Record<string, boolean>>({});
   draggedLayerId = signal<string | null>(null);
   dragOverLayerId = signal<string | null>(null);
 
@@ -386,15 +394,10 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private globalSlideshowFetchKey = computed(() => {
     const elements = this.elements();
-    const targets = elements
-      .filter(el => this.isGlobalSlideshowTarget(el, elements))
-      .map(el => ({ id: el.id, type: el.type, linkGroup: el.linkGroup || '' }));
-
-    if (targets.length === 0) return '';
+    if (!this.hasGlobalSlideshowTargets(elements)) return '';
 
     const collectionType = this.globalCollectionType();
     return JSON.stringify({
-      targets,
       collectionType,
       endpoint: this.getGlobalCollectionEndpointForType(collectionType),
       movieEndpoint: this.getGlobalCollectionEndpointForType('movie'),
@@ -402,6 +405,13 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       itemLimit: this.globalCollectionItemLimit(),
       discoverFilters: this.globalDiscoverFilters()
     });
+  });
+
+  private globalSlideshowTargetKey = computed(() => {
+    const targetIds = this.getGlobalSlideshowTargets(this.elements())
+      .map(el => el.id)
+      .sort();
+    return JSON.stringify(targetIds);
   });
 
   availableCollectionEndpoints = computed(() => {
@@ -486,8 +496,8 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.multiSelectMode() && this.selectedElementIds().length >= 2;
   }
 
-  private normalizeFontSizeUnit(value: any): FontSizeUnit {
-    return this.fontSizeUnits.includes(value) ? value : 'px';
+  private normalizeFontSizeUnit(value: any, fallback: FontSizeUnit = 'pt'): FontSizeUnit {
+    return this.fontSizeUnits.includes(value) ? value : fallback;
   }
 
   private normalizeLineHeightUnit(value: any): FontSizeUnit {
@@ -646,7 +656,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     return {
       enabled,
       width: enabled ? normalizedWidth : 0,
-      unit: this.normalizeFontSizeUnit(unit),
+      unit: this.normalizeFontSizeUnit(unit, 'px'),
       color,
       position: this.normalizeStrokePosition(element.styles.contentStrokePosition)
     };
@@ -654,7 +664,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   formatElementFontSize(element: CanvasElement): string {
     const value = Number(element.styles.fontSize);
-    const size = Number.isFinite(value) ? Math.max(0.1, value) : 16;
+    const size = Number.isFinite(value) ? Math.max(0.1, value) : 14;
     return `${size}${this.normalizeFontSizeUnit(element.styles.fontSizeUnit)}`;
   }
 
@@ -1380,8 +1390,12 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       !this.getCollectionMasterForElement(element, elements);
   }
 
+  private getGlobalSlideshowTargets(elements = this.elements()): CanvasElement[] {
+    return elements.filter(el => this.isGlobalSlideshowTarget(el, elements));
+  }
+
   private hasGlobalSlideshowTargets(elements = this.elements()): boolean {
-    return elements.some(el => this.isGlobalSlideshowTarget(el, elements));
+    return this.getGlobalSlideshowTargets(elements).length > 0;
   }
 
   private normalizeCollectionItemLimit(value: any): number {
@@ -1550,6 +1564,18 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         untracked(() => {
           this.fetchTmdbGenres();
           this.fetchGlobalSlideshowData();
+        });
+    }, { allowSignalWrites: true });
+
+    effect(() => {
+        this.globalSlideshowTargetKey();
+
+        untracked(() => {
+          const currentTargetIds = new Set(this.getGlobalSlideshowTargets().map(el => el.id));
+          const addedTargetIds = Array.from(currentTargetIds).filter(id => !this.globalSlideshowTargetIds.has(id));
+          this.globalSlideshowTargetIds = currentTargetIds;
+          if (addedTargetIds.length === 0) return;
+          void this.syncGlobalSlideshowTargetsToCurrentItem(addedTargetIds);
         });
     }, { allowSignalWrites: true });
 
@@ -1873,13 +1899,13 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         lineHeight: this.normalizeCssLength(element.styles?.lineHeight, 1.2, 0.1, 1000),
         lineHeightUnit: this.normalizeLineHeightUnit(element.styles?.lineHeightUnit),
         textStrokeWidth: this.normalizeCssLength(element.styles?.textStrokeWidth, 0, 0, 100),
-        textStrokeUnit: this.normalizeFontSizeUnit(element.styles?.textStrokeUnit),
+        textStrokeUnit: this.normalizeFontSizeUnit(element.styles?.textStrokeUnit, 'px'),
         textStrokeColor: element.styles?.textStrokeColor || '#000000',
         contentAlignX: this.normalizeContentAlignX(element.styles?.contentAlignX ?? this.getDefaultContentAlignXForType(element.type, element.styles?.textAlign)),
         contentAlignY: this.normalizeContentAlignY(element.styles?.contentAlignY ?? this.getDefaultContentAlignYForType(element.type)),
         contentStrokeEnabled,
         contentStrokeWidth: normalizedContentStrokeWidth,
-        contentStrokeUnit: this.normalizeFontSizeUnit(element.styles?.contentStrokeUnit ?? element.styles?.textStrokeUnit),
+        contentStrokeUnit: this.normalizeFontSizeUnit(element.styles?.contentStrokeUnit ?? element.styles?.textStrokeUnit, 'px'),
         contentStrokeColor: element.styles?.contentStrokeColor || element.styles?.textStrokeColor || '#000000',
         contentStrokePosition: this.normalizeStrokePosition(element.styles?.contentStrokePosition),
         contentShadow: element.styles?.contentShadow || element.styles?.textShadow
@@ -2028,6 +2054,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         elements: JSON.parse(JSON.stringify(this.elements())),
         selectedElementId: this.selectedElementId(),
         selectedElementIds: [...this.selectedElementIds()],
+        selectedLayerGroupId: this.selectedLayerGroupId(),
         multiSelectMode: this.multiSelectMode(),
         globalCollectionType: this.globalCollectionType(),
         globalCollectionEndpoints: { ...this.globalCollectionEndpoints() },
@@ -2068,6 +2095,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       this.elements.set(state.elements);
       this.selectedElementId.set(state.selectedElementId);
       this.selectedElementIds.set(state.selectedElementIds || (state.selectedElementId ? [state.selectedElementId] : []));
+      this.selectedLayerGroupId.set(state.selectedLayerGroupId && state.elements.some(el => el.layoutGroupId === state.selectedLayerGroupId) ? state.selectedLayerGroupId : null);
       this.multiSelectMode.set(!!state.multiSelectMode);
       state.elements.forEach(el => {
         if (el.type === 'tmdb-backdrop-slideshow') this.setupSlideshow(el.id);
@@ -2119,6 +2147,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     this.globalSlideshowRunToken++;
     this.globalSlideshowApplySequence++;
     this.globalSlideshowIndex = 0;
+    if (clearData) this.globalSlideshowTargetIds.clear();
     if (clearData) this.globalSlideshowData.set(null);
   }
 
@@ -2159,8 +2188,8 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
           backgroundOpacity: type === 'shape' ? 1 : 0,
           color: '#f1f5f9',
           fontFamily: 'Inter',
-          fontSize: 16 * baseScale,
-          fontSizeUnit: 'px',
+          fontSize: 14,
+          fontSizeUnit: 'pt',
           fontStyle: type === 'tmdb-tagline' ? 'italic' : 'normal',
           fontWeight: '400',
           textAlign: 'left',
@@ -2235,6 +2264,9 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     const remainingSelection = this.selectedElementIds().filter(selectedId => selectedId !== id);
     this.selectedElementIds.set(remainingSelection);
     if (this.selectedElementId() === id) this.selectedElementId.set(remainingSelection[remainingSelection.length - 1] || null);
+    if (this.selectedLayerGroupId() && !this.elements().some(el => el.layoutGroupId === this.selectedLayerGroupId())) {
+      this.selectedLayerGroupId.set(null);
+    }
 	    if (remainingSelection.length === 0) this.multiSelectMode.set(false);
 	    this.clearElementTransitionPreviews(id);
 	    this.clearCollectionRuntime(id);
@@ -2262,28 +2294,85 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     ));
     this.selectedElementId.set(null);
     this.selectedElementIds.set([]);
+    this.selectedLayerGroupId.set(null);
     this.multiSelectMode.set(false);
     this.saveStateToHistory();
   }
 
   selectElement(id: string | null) {
-    if (this.multiSelectMode() && id) {
-      this.toggleElementInMultiSelection(id);
-      return;
-    }
-
+    this.lockUnlockedSelectedGroupBeforeSelection();
+    this.selectedLayerGroupId.set(null);
     this.selectedElementId.set(id);
     this.selectedElementIds.set(id ? this.getHighlightedElementIds(id) : []);
+    this.multiSelectMode.set(false);
     if(id) {
         this.tmdbSearchResults.set([]);
     }
   }
 
+  private setLayoutGroupLockedById(groupId: string, locked: boolean) {
+    this.elements.update(els => els.map(el => el.layoutGroupId === groupId ? { ...el, groupLocked: locked } : el));
+  }
+
+  private lockUnlockedSelectedGroupBeforeSelection(keepUnlockedGroupId?: string) {
+    const selectedId = this.selectedElementId();
+    if (!selectedId) return;
+    const selected = this.elements().find(el => el.id === selectedId);
+    const groupId = selected?.layoutGroupId;
+    if (!groupId || groupId === keepUnlockedGroupId || this.getLayoutGroupLockState(selected)) return;
+    this.setLayoutGroupLockedById(groupId, true);
+  }
+
+  private isMultiSelectClick(event?: MouseEvent): boolean {
+    return !!event && (event.ctrlKey || event.metaKey);
+  }
+
+  selectLayerElement(elementId: string, event?: MouseEvent) {
+    const element = this.elements().find(el => el.id === elementId);
+    const groupId = element?.layoutGroupId;
+    if (this.isMultiSelectClick(event)) {
+      event?.stopPropagation();
+      this.lockUnlockedSelectedGroupBeforeSelection(groupId);
+      if (groupId) this.setLayoutGroupLockedById(groupId, false);
+      this.toggleElementsInMultiSelection([elementId], elementId);
+      return;
+    }
+
+    this.lockUnlockedSelectedGroupBeforeSelection(groupId);
+    if (groupId) this.setLayoutGroupLockedById(groupId, false);
+    this.selectedLayerGroupId.set(null);
+    this.selectedElementId.set(elementId);
+    this.selectedElementIds.set([elementId]);
+    this.multiSelectMode.set(false);
+    this.tmdbSearchResults.set([]);
+  }
+
+  selectLayerGroup(groupId: string, event?: MouseEvent) {
+    this.lockUnlockedSelectedGroupBeforeSelection(groupId);
+    const groupElements = this.getLayoutGroupElementsById(groupId);
+    if (groupElements.length === 0) return;
+    this.setLayoutGroupLockedById(groupId, true);
+    const controller = groupElements.find(el => el.layoutGroupRole === 'background') || groupElements.slice().sort((a, b) => a.zIndex - b.zIndex || a.id.localeCompare(b.id))[0];
+    if (this.isMultiSelectClick(event)) {
+      event?.stopPropagation();
+      this.toggleElementsInMultiSelection(groupElements.map(el => el.id), controller.id);
+      return;
+    }
+
+    this.selectedLayerGroupId.set(groupId);
+    this.selectedElementId.set(controller.id);
+    this.selectedElementIds.set(groupElements.map(el => el.id));
+    this.multiSelectMode.set(false);
+    this.tmdbSearchResults.set([]);
+  }
+
   selectElementFromPointer(event: MouseEvent, id: string) {
     if (event.button === 1) return;
-    if (this.multiSelectMode()) {
+    if (this.isMultiSelectClick(event)) {
       event.stopPropagation();
-      this.toggleElementInMultiSelection(id);
+      const element = this.elements().find(el => el.id === id);
+      this.lockUnlockedSelectedGroupBeforeSelection(element?.layoutGroupId);
+      this.toggleElementsInMultiSelection(this.getHighlightedElementIds(id), id);
       return;
     }
     this.selectElement(id);
@@ -2291,24 +2380,22 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   deselectCanvas(event: MouseEvent) {
     if ((event.target as HTMLElement).id !== 'canvas-bg') return;
+    this.lockUnlockedSelectedGroupBeforeSelection();
+    this.selectedLayerGroupId.set(null);
     this.selectedElementId.set(null);
     this.selectedElementIds.set([]);
     this.multiSelectMode.set(false);
   }
 
   toggleMultiSelectFromContext(elementId: string) {
-    if (!this.multiSelectMode()) {
-      this.multiSelectMode.set(true);
-      this.selectedElementId.set(elementId);
-      this.selectedElementIds.set([elementId]);
-    } else {
-      this.toggleElementInMultiSelection(elementId);
-    }
+    this.toggleElementInMultiSelection(elementId);
     this.activeRightPanelTab.set('properties');
     this.contextMenu.update(cm => ({ ...cm, visible: false }));
   }
 
   clearMultiSelection() {
+    this.lockUnlockedSelectedGroupBeforeSelection();
+    this.selectedLayerGroupId.set(null);
     this.multiSelectMode.set(false);
     const selectedId = this.selectedElementId();
     this.selectedElementIds.set(selectedId ? this.getHighlightedElementIds(selectedId) : []);
@@ -2316,14 +2403,23 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private toggleElementInMultiSelection(elementId: string) {
+    this.toggleElementsInMultiSelection([elementId], elementId);
+  }
+
+  private toggleElementsInMultiSelection(elementIds: string[], activeElementId = elementIds[elementIds.length - 1]) {
     this.tmdbSearchResults.set([]);
-    this.selectedElementIds.update(ids => {
-      const exists = ids.includes(elementId);
-      const next = exists ? ids.filter(id => id !== elementId) : [...ids, elementId];
-      this.selectedElementId.set(next[next.length - 1] || null);
-      if (next.length === 0) this.multiSelectMode.set(false);
-      return next;
-    });
+    this.selectedLayerGroupId.set(null);
+    const validIds = elementIds.filter(id => this.elements().some(el => el.id === id));
+    if (validIds.length === 0) return;
+    const toggleSet = new Set(validIds);
+    const current = this.selectedElementIds().filter(id => this.elements().some(el => el.id === id));
+    const allSelected = validIds.every(id => current.includes(id));
+    const next = allSelected
+      ? current.filter(id => !toggleSet.has(id))
+      : [...current, ...validIds.filter(id => !current.includes(id))];
+    this.selectedElementId.set(allSelected ? (next[next.length - 1] || null) : activeElementId);
+    this.selectedElementIds.set(next);
+    this.multiSelectMode.set(next.length > 1);
   }
 
   private createGroupBackgroundElement(groupElements: CanvasElement[], layoutGroupId: string, groupLocked: boolean, source?: CanvasElement): CanvasElement | null {
@@ -2353,8 +2449,8 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         backgroundOpacity: 0.72,
         color: '#f1f5f9',
         fontFamily: 'Inter',
-        fontSize: 16,
-        fontSizeUnit: 'px',
+        fontSize: 14,
+        fontSizeUnit: 'pt',
         fontStyle: 'normal',
         fontWeight: '400',
         textAlign: 'left',
@@ -2384,6 +2480,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       imageFit: 'cover',
       layoutGroupId,
       layoutGroupRole: 'background',
+      groupName: source?.groupName,
       groupLocked,
       groupPadding: padding,
       groupTransitionEnabled: !!source?.groupTransitionEnabled,
@@ -2405,6 +2502,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     if (selected.length < 2) return;
 
     const layoutGroupId = `layout_${Date.now().toString(36)}`;
+    const groupName = this.getNextLayerGroupName();
     const selectedIdSet = new Set(ids);
     this.elements.update(els => els.map(el => {
         if (!selectedIdSet.has(el.id)) return el;
@@ -2413,6 +2511,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
           ...rest,
           layoutGroupId,
           layoutGroupRole: 'member' as LayoutGroupRole,
+          groupName,
           groupLocked: true
         };
     }));
@@ -2423,6 +2522,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       : ids[ids.length - 1];
     this.selectedElementId.set(selectedId);
     this.selectedElementIds.set(this.getHighlightedElementIds(selectedId));
+    this.selectedLayerGroupId.set(layoutGroupId);
     this.activeRightPanelTab.set('properties');
     this.contextMenu.update(cm => ({ ...cm, visible: false }));
     this.saveStateToHistory();
@@ -2462,6 +2562,79 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   getLayerElements(): CanvasElement[] {
     return this.getLayerOrder();
+  }
+
+  getLayerTreeItems(elements = this.elements()): LayerTreeItem[] {
+    const orderedElements = this.getLayerOrder(elements);
+    const seenGroups = new Set<string>();
+    return orderedElements.reduce((items, element) => {
+      if (!element.layoutGroupId) {
+        items.push({ kind: 'element', element });
+        return items;
+      }
+
+      if (seenGroups.has(element.layoutGroupId)) return items;
+      seenGroups.add(element.layoutGroupId);
+      items.push({
+        kind: 'group',
+        groupId: element.layoutGroupId,
+        elements: orderedElements.filter(el => el.layoutGroupId === element.layoutGroupId)
+      });
+      return items;
+    }, [] as LayerTreeItem[]);
+  }
+
+  getLayerTreeItemTrack(item: LayerTreeItem): string {
+    return item.kind === 'group' ? `group:${item.groupId}` : item.element.id;
+  }
+
+  getLayerGroupName(groupId: string, elements = this.elements()): string {
+    const groupElements = elements.filter(el => el.layoutGroupId === groupId);
+    const storedName = groupElements.find(el => el.groupName?.trim())?.groupName?.trim();
+    if (storedName) return storedName;
+
+    const groupIds = this.getLayerTreeItems(elements)
+      .filter((item): item is Extract<LayerTreeItem, { kind: 'group' }> => item.kind === 'group')
+      .map(item => item.groupId);
+    const index = Math.max(0, groupIds.indexOf(groupId));
+    return `Group ${index + 1}`;
+  }
+
+  private getNextLayerGroupName(): string {
+    const existingNames = new Set(
+      this.elements()
+        .map(el => el.groupName?.trim().toLowerCase())
+        .filter((name): name is string => !!name)
+    );
+    this.getLayerTreeItems()
+      .filter((item): item is Extract<LayerTreeItem, { kind: 'group' }> => item.kind === 'group')
+      .forEach(item => existingNames.add(this.getLayerGroupName(item.groupId).trim().toLowerCase()));
+    let index = 1;
+    while (existingNames.has(`group ${index}`)) index++;
+    return `Group ${index}`;
+  }
+
+  updateLayerGroupName(groupId: string, value: string) {
+    const groupName = String(value || '').trim();
+    this.elements.update(els => els.map(el => el.layoutGroupId === groupId ? { ...el, groupName } : el));
+    this.saveStateToHistory();
+  }
+
+  isLayerGroupCollapsed(groupId: string): boolean {
+    return !!this.collapsedLayerGroupIds()[groupId];
+  }
+
+  toggleLayerGroupCollapsed(groupId: string, event?: MouseEvent) {
+    event?.stopPropagation();
+    this.collapsedLayerGroupIds.update(collapsed => ({ ...collapsed, [groupId]: !collapsed[groupId] }));
+  }
+
+  isLayerGroupSelected(groupId: string): boolean {
+    return this.selectedLayerGroupId() === groupId;
+  }
+
+  private getLayoutGroupElementsById(groupId: string, elements = this.elements()): CanvasElement[] {
+    return elements.filter(el => el.layoutGroupId === groupId);
   }
 
   private applyLayerOrder(layerOrder: CanvasElement[], saveHistory = true) {
@@ -2516,7 +2689,9 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     this.updateSelectedElement(el => {
       let nextValue = value;
       if (prop === 'fontSizeUnit' || prop === 'textStrokeUnit' || prop === 'contentStrokeUnit') {
-        nextValue = this.normalizeFontSizeUnit(value);
+        nextValue = prop === 'fontSizeUnit'
+          ? this.normalizeFontSizeUnit(value)
+          : this.normalizeFontSizeUnit(value, 'px');
       } else if (prop === 'lineHeightUnit') {
         nextValue = this.normalizeLineHeightUnit(value);
       } else if (prop === 'contentAlignX') {
@@ -2743,6 +2918,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       if (el.layoutGroupId !== selected.layoutGroupId) return el;
       return { ...el, groupLocked: locked };
     }));
+    this.selectedLayerGroupId.set(locked ? selected.layoutGroupId : null);
     if (this.selectedElementId()) this.selectedElementIds.set(this.getHighlightedElementIds(this.selectedElementId()!));
     this.saveStateToHistory();
   }
@@ -2754,9 +2930,15 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     const groupId = selected.layoutGroupId;
     this.elements.update(els => els.map(el => {
       if (el.layoutGroupId !== groupId) return el;
-      const { layoutGroupId, layoutGroupRole, groupLocked, groupPadding, groupTransitionEnabled, ...rest } = el;
+      const { layoutGroupId, layoutGroupRole, groupName, groupLocked, groupPadding, groupTransitionEnabled, ...rest } = el;
       return rest as CanvasElement;
     }));
+    if (this.selectedLayerGroupId() === groupId) this.selectedLayerGroupId.set(null);
+    this.collapsedLayerGroupIds.update(collapsed => {
+      if (!collapsed[groupId]) return collapsed;
+      const { [groupId]: _removed, ...rest } = collapsed;
+      return rest;
+    });
     this.selectedElementIds.set(this.selectedElementId() ? [this.selectedElementId()!] : []);
     this.saveStateToHistory();
   }
@@ -2924,7 +3106,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
           ...el.styles,
           contentStrokeEnabled: enabled,
           contentStrokeWidth: enabled ? (width > 0 ? width : 1) : width,
-          contentStrokeUnit: this.normalizeFontSizeUnit(el.styles.contentStrokeUnit ?? el.styles.textStrokeUnit),
+          contentStrokeUnit: this.normalizeFontSizeUnit(el.styles.contentStrokeUnit ?? el.styles.textStrokeUnit, 'px'),
           contentStrokeColor: el.styles.contentStrokeColor || el.styles.textStrokeColor || '#000000',
           contentStrokePosition: this.normalizeStrokePosition(el.styles.contentStrokePosition)
         }
@@ -3571,6 +3753,13 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     return results.filter((item: any) => item?.id).slice(0, this.globalCollectionItemLimit());
   }
 
+  private getCurrentGlobalSlideshowItem(): any | null {
+    const items = this.getGlobalSlideshowItems();
+    if (items.length === 0) return null;
+    const index = ((this.globalSlideshowIndex % items.length) + items.length) % items.length;
+    return items[index] || null;
+  }
+
   private enrichGlobalSlideshowData(data: any, headers: HttpHeaders): Observable<any> {
     if (!data || !Array.isArray(data.results)) return of(data);
 
@@ -3679,6 +3868,17 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private async propagateGlobalSlideshowItem(item: any, runToken = this.globalSlideshowRunToken) {
+    await this.applyGlobalSlideshowItemToTargets(item, undefined, runToken, true);
+  }
+
+  private async syncGlobalSlideshowTargetsToCurrentItem(targetIds: string[]) {
+    if (targetIds.length === 0 || !this.globalSlideshowData()) return;
+    const currentItem = this.getCurrentGlobalSlideshowItem();
+    if (!currentItem) return;
+    await this.applyGlobalSlideshowItemToTargets(currentItem, new Set(targetIds), this.globalSlideshowRunToken, false);
+  }
+
+  private async applyGlobalSlideshowItemToTargets(item: any, targetIdFilter?: Set<string>, runToken = this.globalSlideshowRunToken, cancelPreviousApplies = true) {
     if (!item?.id) return;
 
     const data = this.globalSlideshowData();
@@ -3687,16 +3887,19 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     const details = data?.__detailsById || {};
     const key = this.detailKeyForItem(item, fallbackType);
     const detail = details[key] || details[String(item.id)] || item;
-    const targets = this.elements().filter(el => this.isGlobalSlideshowTarget(el));
+    const targets = this.getGlobalSlideshowTargets()
+      .filter(el => !targetIdFilter || targetIdFilter.has(el.id));
     const targetIds = targets.map(el => el.id);
 
     if (targetIds.length === 0) return;
-    const applySequence = ++this.globalSlideshowApplySequence;
+    const applySequence = cancelPreviousApplies ? ++this.globalSlideshowApplySequence : this.globalSlideshowApplySequence;
     await this.preloadGlobalTargetMedia(targets, detail);
-    if (this.globalSlideshowRunToken !== runToken || this.globalSlideshowApplySequence !== applySequence) return;
+    if (this.globalSlideshowRunToken !== runToken) return;
+    if (cancelPreviousApplies && this.globalSlideshowApplySequence !== applySequence) return;
 
     const stagedBackdropIds = new Set(this.prepareDynamicBackdropTransitions(targets, detail));
     this.elements.update(els => els.map(el => {
+      if (targetIdFilter && !targetIdFilter.has(el.id)) return el;
       if (!this.isGlobalSlideshowTarget(el, els)) return el;
       return {
         ...el,
@@ -4412,7 +4615,34 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   openLayerContextMenu(event: MouseEvent, elementId: string) {
-    this.openContextMenu(event, elementId);
+    event.preventDefault();
+    event.stopPropagation();
+    if (this.multiSelectMode()) {
+      if (!this.isElementInMultiSelection(elementId)) this.toggleElementInMultiSelection(elementId);
+      this.selectedElementId.set(elementId);
+    } else {
+      this.selectLayerElement(elementId);
+    }
+    const menuWidth = 224;
+    const menuHeight = 560;
+    const x = event.clientX + menuWidth > window.innerWidth ? window.innerWidth - menuWidth - 10 : event.clientX;
+    const y = event.clientY + menuHeight > window.innerHeight ? window.innerHeight - menuHeight - 10 : event.clientY;
+    this.contextMenu.set({ visible: true, x, y, elementId });
+  }
+
+  openLayerGroupContextMenu(event: MouseEvent, groupId: string) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.selectLayerGroup(groupId);
+    const controller = this.getLayoutGroupElementsById(groupId)
+      .find(el => el.layoutGroupRole === 'background') || this.getLayoutGroupElementsById(groupId)[0];
+    if (!controller) return;
+
+    const menuWidth = 224;
+    const menuHeight = 560;
+    const x = event.clientX + menuWidth > window.innerWidth ? window.innerWidth - menuWidth - 10 : event.clientX;
+    const y = event.clientY + menuHeight > window.innerHeight ? window.innerHeight - menuHeight - 10 : event.clientY;
+    this.contextMenu.set({ visible: true, x, y, elementId: controller.id });
   }
 
   duplicateElement(id: string) {
@@ -4426,6 +4656,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       zIndex: this.elements().length + 1,
       layoutGroupId: undefined,
       layoutGroupRole: undefined,
+      groupName: undefined,
       groupLocked: undefined,
       groupPadding: undefined,
       groupTransitionEnabled: undefined,
@@ -4534,8 +4765,8 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.fonts.includes(font) ? font : 'Inter';
   }
 
-  private safeFontSizeUnit(unit: any): FontSizeUnit {
-    return this.normalizeFontSizeUnit(unit);
+  private safeFontSizeUnit(unit: any, fallback: FontSizeUnit = 'pt'): FontSizeUnit {
+    return this.normalizeFontSizeUnit(unit, fallback);
   }
 
   private normalizeExportDiscoverFilters(filters: DiscoverFilters | undefined): DiscoverFilters {
@@ -5287,7 +5518,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
             const topPct = (this.clampNumber(el.y, 0, -100000, 100000) / height) * 100;
             const widthPct = (this.clampNumber(el.width, 1, 1, 100000) / width) * 100;
             const heightPct = (this.clampNumber(el.height, 1, 1, 100000) / height) * 100;
-            const fontSize = this.clampNumber(s.fontSize, 16, 0.1, 500);
+            const fontSize = this.clampNumber(s.fontSize, 14, 0.1, 500);
             const fontSizeUnit = this.safeFontSizeUnit(s.fontSizeUnit);
             const lineHeightUnit = this.normalizeLineHeightUnit(s.lineHeightUnit);
             const lineHeightFallback = lineHeightUnit === 'em' || lineHeightUnit === 'rem' ? 1.2 : fontSize * 1.2;
@@ -5305,7 +5536,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
             const rawContentStrokeWidth = this.clampNumber(s.contentStrokeWidth ?? s.textStrokeWidth, 0, 0, 100);
             const contentStrokeEnabled = s.contentStrokeEnabled ?? (rawContentStrokeWidth > 0);
             const contentStrokeWidth = contentStrokeEnabled ? rawContentStrokeWidth : 0;
-            const contentStrokeUnit = this.safeFontSizeUnit(s.contentStrokeUnit ?? s.textStrokeUnit);
+            const contentStrokeUnit = this.safeFontSizeUnit(s.contentStrokeUnit ?? s.textStrokeUnit, 'px');
             const contentStrokeColor = this.safeCssColor(s.contentStrokeColor || s.textStrokeColor, '#000000');
             const contentStrokePosition = this.normalizeStrokePosition(s.contentStrokePosition);
             const outsideStrokeBoxShadow = contentStrokeWidth > 0 && contentStrokePosition === 'outside'

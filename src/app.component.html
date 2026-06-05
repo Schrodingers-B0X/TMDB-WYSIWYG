@@ -10,10 +10,12 @@
     <button (click)="duplicateElement(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors"><i class="fa-solid fa-copy w-4 text-center"></i> Duplicate</button>
     <button (click)="copyStyles(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors"><i class="fa-solid fa-palette w-4 text-center"></i> Copy Styles</button>
     <button (click)="pasteStyles(contextMenu().elementId!)" [disabled]="!copiedStyles()" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-paste w-4 text-center"></i> Paste Styles</button>
-    <button (click)="toggleMultiSelectFromContext(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors">
-      <i class="fa-solid fa-object-ungroup w-4 text-center"></i>
-      {{ multiSelectMode() ? (isElementInMultiSelection(contextMenu().elementId) ? 'Remove From Selection' : 'Add To Selection') : 'Select Multiple' }}
-    </button>
+    @if (multiSelectMode()) {
+      <button (click)="toggleMultiSelectFromContext(contextMenu().elementId!)" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors">
+        <i class="fa-solid fa-object-ungroup w-4 text-center"></i>
+        {{ isElementInMultiSelection(contextMenu().elementId) ? 'Remove From Selection' : 'Add To Selection' }}
+      </button>
+    }
     @if (canGroupSelection()) {
       <button (click)="groupSelectedLayers()" class="w-full flex items-center gap-3 text-left px-4 py-2 hover:bg-[#01b4e4] hover:text-[#0d253f] transition-colors">
         <i class="fa-solid fa-object-group w-4 text-center"></i> Group Layers
@@ -679,48 +681,111 @@
 
                 <div class="text-[10px] text-[#64839e] mb-2 px-2"><i class="fa-solid fa-info-circle mr-1"></i> Drag layers to reorder them. Right-click for layer controls.</div>
 
-                @for (element of getLayerElements(); track element.id) {
-                    <div
-                        draggable="true"
-                        (dragstart)="onLayerDragStart($event, element.id)"
-                        (dragend)="onLayerDragEnd()"
-                        (dragover)="onLayerDragOver($event, element.id)"
-                        (dragleave)="onLayerDragLeave($event)"
-                        (drop)="onLayerDrop($event, element.id)"
-                        (contextmenu)="openLayerContextMenu($event, element.id)"
-                        (click)="selectElement(element.id)"
-                        class="layer-item group transition-all duration-200"
-                        [class.selected]="isElementSelected(element.id)"
-                        [class.drag-over]="dragOverLayerId() === element.id">
+                @for (item of getLayerTreeItems(); track getLayerTreeItemTrack(item)) {
+                    @if (item.kind === 'group') {
+                        <div
+                            (click)="selectLayerGroup(item.groupId, $event)"
+                            (contextmenu)="openLayerGroupContextMenu($event, item.groupId)"
+                            class="layer-item group transition-all duration-200"
+                            [class.selected]="isLayerGroupSelected(item.groupId)">
+                            <div class="flex items-center gap-2 overflow-hidden flex-1">
+                                <button (click)="toggleLayerGroupCollapsed(item.groupId, $event)" class="text-[#8eaec4] hover:text-white w-4 text-center">
+                                    <i class="fa-solid fa-chevron-down text-[10px] transition-transform" [class.-rotate-90]="isLayerGroupCollapsed(item.groupId)"></i>
+                                </button>
+                                <i class="fa-solid fa-folder-tree text-xs w-4 text-center text-[#01b4e4]"></i>
+                                <input
+                                    [ngModel]="getLayerGroupName(item.groupId)"
+                                    (ngModelChange)="updateLayerGroupName(item.groupId, $event)"
+                                    (click)="selectLayerGroup(item.groupId); $event.stopPropagation()"
+                                    (focus)="selectLayerGroup(item.groupId)"
+                                    (mousedown)="$event.stopPropagation()"
+                                    class="min-w-0 flex-1 bg-transparent border border-transparent focus:border-[#01b4e4]/50 rounded px-1 py-0.5 text-xs font-semibold text-[#d8edf8] outline-none">
+                            </div>
+                            <span class="text-[10px] text-[#64839e]">{{ item.elements.length }}</span>
+                        </div>
 
-                        <div class="flex items-center gap-2 overflow-hidden flex-1">
-                            <i class="fa-solid text-xs w-4 text-center text-[#8eaec4]"
-                               [class.fa-font]="element.type === 'text'"
-                               [class.fa-image]="element.type.includes('image') || element.type.includes('poster') || element.type.includes('backdrop')"
-                               [class.fa-square]="element.type === 'shape'"
-                               [class.fa-database]="element.type === 'tmdb-dynamic-field'"></i>
-
-                            <div class="flex flex-col min-w-0">
-                                <span class="truncate font-medium leading-tight">{{ formatTypeName(element.type) }}</span>
-                                @if (element.linkGroup) {
-                                    <div class="flex items-center gap-1 mt-0.5">
-                                        <span class="text-[9px] bg-[#01b4e4]/20 text-[#01b4e4] px-1 py-0.5 rounded border border-[#01b4e4]/30 flex items-center gap-1">
-                                            <i class="fa-solid fa-link text-[8px]"></i>
-                                            {{element.linkGroup.replace('group_', 'Group ')}}
-                                        </span>
-                                        <button (click)="unlinkElement(element.id, $event)" class="text-[#64839e] hover:text-red-400 px-1" title="Unlink"><i class="fa-solid fa-unlink text-[9px]"></i></button>
+                        @if (!isLayerGroupCollapsed(item.groupId)) {
+                            @for (element of item.elements; track element.id) {
+                                <div
+                                    draggable="true"
+                                    (dragstart)="onLayerDragStart($event, element.id)"
+                                    (dragend)="onLayerDragEnd()"
+                                    (dragover)="onLayerDragOver($event, element.id)"
+                                    (dragleave)="onLayerDragLeave($event)"
+                                    (drop)="onLayerDrop($event, element.id)"
+                                    (contextmenu)="openLayerContextMenu($event, element.id)"
+                                    (click)="selectLayerElement(element.id, $event)"
+                                    class="layer-item layer-item-child group transition-all duration-200"
+                                    [class.selected]="selectedElementId() === element.id && !selectedLayerGroupId()"
+                                    [class.drag-over]="dragOverLayerId() === element.id">
+                                    <div class="flex items-center gap-2 overflow-hidden flex-1">
+                                        <i class="fa-solid text-xs w-4 text-center text-[#8eaec4]"
+                                           [class.fa-font]="element.type === 'text'"
+                                           [class.fa-image]="element.type.includes('image') || element.type.includes('poster') || element.type.includes('backdrop')"
+                                           [class.fa-square]="element.type === 'shape'"
+                                           [class.fa-database]="element.type === 'tmdb-dynamic-field'"></i>
+                                        <div class="flex flex-col min-w-0">
+                                            <span class="truncate font-medium leading-tight">{{ formatTypeName(element.type) }}</span>
+                                            @if (element.linkGroup) {
+                                                <div class="flex items-center gap-1 mt-0.5">
+                                                    <span class="text-[9px] bg-[#01b4e4]/20 text-[#01b4e4] px-1 py-0.5 rounded border border-[#01b4e4]/30 flex items-center gap-1">
+                                                        <i class="fa-solid fa-link text-[8px]"></i>
+                                                        {{element.linkGroup.replace('group_', 'Group ')}}
+                                                    </span>
+                                                    <button (click)="unlinkElement(element.id, $event)" class="text-[#64839e] hover:text-red-400 px-1" title="Unlink"><i class="fa-solid fa-unlink text-[9px]"></i></button>
+                                                </div>
+                                            }
+                                        </div>
                                     </div>
-                                }
+                                    <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button (click)="deleteElement(element.id); $event.stopPropagation()" class="p-1 text-[#64839e] hover:text-red-400"><i class="fa-solid fa-trash text-xs"></i></button>
+                                        <button (click)="toggleVisibility(element.id); $event.stopPropagation()" class="p-1 text-[#64839e] hover:text-white">
+                                            <i class="fa-solid fa-fw text-xs" [class.fa-eye]="element.visible" [class.fa-eye-slash]="!element.visible"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    } @else {
+                        <div
+                            draggable="true"
+                            (dragstart)="onLayerDragStart($event, item.element.id)"
+                            (dragend)="onLayerDragEnd()"
+                            (dragover)="onLayerDragOver($event, item.element.id)"
+                            (dragleave)="onLayerDragLeave($event)"
+                            (drop)="onLayerDrop($event, item.element.id)"
+                            (contextmenu)="openLayerContextMenu($event, item.element.id)"
+                            (click)="selectLayerElement(item.element.id, $event)"
+                            class="layer-item group transition-all duration-200"
+                            [class.selected]="isElementSelected(item.element.id)"
+                            [class.drag-over]="dragOverLayerId() === item.element.id">
+                            <div class="flex items-center gap-2 overflow-hidden flex-1">
+                                <i class="fa-solid text-xs w-4 text-center text-[#8eaec4]"
+                                   [class.fa-font]="item.element.type === 'text'"
+                                   [class.fa-image]="item.element.type.includes('image') || item.element.type.includes('poster') || item.element.type.includes('backdrop')"
+                                   [class.fa-square]="item.element.type === 'shape'"
+                                   [class.fa-database]="item.element.type === 'tmdb-dynamic-field'"></i>
+                                <div class="flex flex-col min-w-0">
+                                    <span class="truncate font-medium leading-tight">{{ formatTypeName(item.element.type) }}</span>
+                                    @if (item.element.linkGroup) {
+                                        <div class="flex items-center gap-1 mt-0.5">
+                                            <span class="text-[9px] bg-[#01b4e4]/20 text-[#01b4e4] px-1 py-0.5 rounded border border-[#01b4e4]/30 flex items-center gap-1">
+                                                <i class="fa-solid fa-link text-[8px]"></i>
+                                                {{item.element.linkGroup.replace('group_', 'Group ')}}
+                                            </span>
+                                            <button (click)="unlinkElement(item.element.id, $event)" class="text-[#64839e] hover:text-red-400 px-1" title="Unlink"><i class="fa-solid fa-unlink text-[9px]"></i></button>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button (click)="deleteElement(item.element.id); $event.stopPropagation()" class="p-1 text-[#64839e] hover:text-red-400"><i class="fa-solid fa-trash text-xs"></i></button>
+                                <button (click)="toggleVisibility(item.element.id); $event.stopPropagation()" class="p-1 text-[#64839e] hover:text-white">
+                                    <i class="fa-solid fa-fw text-xs" [class.fa-eye]="item.element.visible" [class.fa-eye-slash]="!item.element.visible"></i>
+                                </button>
                             </div>
                         </div>
-
-                        <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                             <button (click)="deleteElement(element.id); $event.stopPropagation()" class="p-1 text-[#64839e] hover:text-red-400"><i class="fa-solid fa-trash text-xs"></i></button>
-                            <button (click)="toggleVisibility(element.id); $event.stopPropagation()" class="p-1 text-[#64839e] hover:text-white">
-                                <i class="fa-solid fa-fw text-xs" [class.fa-eye]="element.visible" [class.fa-eye-slash]="!element.visible"></i>
-                            </button>
-                        </div>
-                    </div>
+                    }
                 }
             </div>
         }
@@ -784,7 +849,7 @@
 
               <!-- DYNAMIC FIELD PROPERTIES -->
               @if(el.type === 'tmdb-dynamic-field') {
-                <details class="accordion" open>
+                <details class="accordion">
                     <summary class="text-[#01b4e4]">Data Binding</summary>
                     <div class="accordion-content space-y-3">
                         <div class="input-group">
@@ -846,7 +911,7 @@
               }
 
               @if(el.layoutGroupId) {
-                <details class="accordion" open>
+                <details class="accordion">
                   <summary>Layout Group</summary>
                   <div class="accordion-content space-y-3">
                     <div class="p-3 bg-[#0a1724] rounded border border-[#254261]">
@@ -883,7 +948,7 @@
               }
 
               <!-- LAYOUT -->
-              <details class="accordion" open>
+              <details class="accordion">
                 <summary>Layout & Position</summary>
                 <div class="accordion-content">
                   @if(el.type.startsWith('tmdb-')) {
@@ -1021,7 +1086,7 @@
               </details>
 
               <!-- APPEARANCE (Includes Image Fit) -->
-              <details class="accordion" open>
+              <details class="accordion">
                 <summary>Appearance</summary>
                 <div class="accordion-content space-y-4">
 
@@ -1184,7 +1249,7 @@
                       <label class="label">Size</label>
                       <div class="flex gap-2">
                         <input type="number" min="0.1" step="0.1" [ngModel]="el.styles.fontSize" (ngModelChange)="updateElementStyle('fontSize', +$event)" class="input">
-                        <select [ngModel]="el.styles.fontSizeUnit || 'px'" (ngModelChange)="updateElementStyle('fontSizeUnit', $event)" class="select w-20 px-2">
+                        <select [ngModel]="el.styles.fontSizeUnit || 'pt'" (ngModelChange)="updateElementStyle('fontSizeUnit', $event)" class="select w-20 px-2">
                           @for(unit of fontSizeUnits; track unit) { <option [value]="unit">{{unit}}</option> }
                         </select>
                       </div>
