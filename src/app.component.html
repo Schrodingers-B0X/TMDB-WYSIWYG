@@ -450,6 +450,7 @@
               [style.animationDelay]="getElementTransitionDelayStyle(element)"
               [style.animationTimingFunction]="getElementTransitionTimingFunction(element)"
               [style.animationFillMode]="getElementTransitionFillMode(element)"
+              [style.transformOrigin]="getElementTransitionOrigin(element)"
               [style.transform]="'rotate(' + element.rotation + 'deg)'"
               [ngClass]="getElementTransitionClassMap(element)"
               [style.backgroundColor]="!element.styles.backgroundGradient ? hexToRgba(element.styles.backgroundColor, element.styles.backgroundOpacity ?? 1) : null"
@@ -1050,12 +1051,25 @@
                 <summary>Transitions</summary>
                 <div class="accordion-content space-y-3">
                   <div>
-                    <label class="label">Effect</label>
-                    <select [ngModel]="getEffectiveTransitionEffect(el)" (ngModelChange)="updateTransitionSetting(el.id, 'transitionEffect', $event)" class="select text-xs">
-                      @for(effect of transitionEffectOptions; track effect.value) {
-                        <option [value]="effect.value">{{ effect.label }}</option>
+                    <label class="label mb-2">{{ getTransitionControlLabel(el) }}</label>
+                    <div class="motion-preset-grid">
+                      @for(preset of getAvailableTransitionPresetOptions(el); track preset.value) {
+                        <button
+                          type="button"
+                          (click)="updateTransitionSetting(el.id, 'transitionPreset', preset.value)"
+                          class="motion-preset-button"
+                          [class.active]="isTransitionPresetSelected(el, preset.value)"
+                          [title]="preset.description">
+                          <span class="motion-preset-preview" [class]="'motion-preset-preview motion-preset-preview-' + preset.value">
+                            <span></span>
+                          </span>
+                          <span class="min-w-0 text-left">
+                            <span class="motion-preset-label">{{ preset.label }}</span>
+                            <span class="motion-preset-description">{{ preset.description }}</span>
+                          </span>
+                        </button>
                       }
-                    </select>
+                    </div>
                   </div>
 
                   <div class="grid grid-cols-2 gap-2">
@@ -1076,6 +1090,83 @@
                       </select>
                     </div>
                   </div>
+
+                  <details class="motion-advanced-panel">
+                    <summary>Advanced In/Out Timing</summary>
+                    <div class="motion-phase-grid">
+                      <div class="motion-phase-card">
+                        <div class="motion-phase-header">
+                          <span>Incoming</span>
+                          <button (click)="previewTransitionPhase(el.id, 'in')" class="btn btn-secondary px-2 py-1 text-[11px]" title="Preview incoming transition">
+                            <i class="fa-solid fa-play"></i> Preview In
+                          </button>
+                        </div>
+                        <label class="label">Preset</label>
+                        <select [ngModel]="getEffectiveTransitionPresetForPhase(el, 'in')" (ngModelChange)="updateTransitionSetting(el.id, 'transitionInPreset', $event)" class="select text-xs mb-2">
+                          @for(preset of getAvailableTransitionPresetOptions(el); track preset.value) {
+                            <option [value]="preset.value">{{ preset.label }}</option>
+                          }
+                        </select>
+                        <div class="grid grid-cols-2 gap-2">
+                          <div>
+                            <label class="label">Duration</label>
+                            <select [ngModel]="getEffectiveTransitionDurationMsForPhase(el, 'in')" (ngModelChange)="updateTransitionSetting(el.id, 'transitionInDurationMs', +$event)" class="select text-xs">
+                              @for(duration of transitionDurationOptions; track duration) {
+                                <option [value]="duration">{{ duration }} ms</option>
+                              }
+                            </select>
+                          </div>
+                          <div>
+                            <label class="label">Delay</label>
+                            <select [ngModel]="getEffectiveTransitionDelayMsForPhase(el, 'in')" (ngModelChange)="updateTransitionSetting(el.id, 'transitionInDelayMs', +$event)" class="select text-xs">
+                              @for(delay of transitionDelayOptions; track delay) {
+                                <option [value]="delay">{{ delay }} ms</option>
+                              }
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="motion-phase-card">
+                        <div class="motion-phase-header">
+                          <span>Outgoing</span>
+                          <button (click)="previewTransitionPhase(el.id, 'out')" class="btn btn-secondary px-2 py-1 text-[11px]" title="Preview outgoing transition">
+                            <i class="fa-solid fa-play"></i> Preview Out
+                          </button>
+                        </div>
+                        <label class="label">Preset</label>
+                        <select [ngModel]="getEffectiveTransitionPresetForPhase(el, 'out')" (ngModelChange)="updateTransitionSetting(el.id, 'transitionOutPreset', $event)" class="select text-xs mb-2">
+                          @for(preset of getAvailableTransitionPresetOptions(el); track preset.value) {
+                            <option [value]="preset.value">{{ preset.label }}</option>
+                          }
+                        </select>
+                        <button (click)="useOppositeOutgoingTransition(el.id)" class="btn btn-secondary w-full px-2 py-1 text-[11px] mb-2" title="Use the opposite incoming direction for outgoing motion">
+                          <i class="fa-solid fa-arrows-up-down-left-right"></i> Use Opposite Direction
+                        </button>
+                        <div class="grid grid-cols-2 gap-2">
+                          <div>
+                            <label class="label">Duration</label>
+                            <select [ngModel]="getEffectiveTransitionDurationMsForPhase(el, 'out')" (ngModelChange)="updateTransitionSetting(el.id, 'transitionOutDurationMs', +$event)" class="select text-xs">
+                              @for(duration of transitionDurationOptions; track duration) {
+                                <option [value]="duration">{{ duration }} ms</option>
+                              }
+                            </select>
+                          </div>
+                          <div>
+                            <label class="label">Delay</label>
+                            <select [ngModel]="getEffectiveTransitionDelayMsForPhase(el, 'out')" (ngModelChange)="updateTransitionSetting(el.id, 'transitionOutDelayMs', +$event)" class="select text-xs">
+                              @for(delay of transitionDelayOptions; track delay) {
+                                <option [value]="delay">{{ delay }} ms</option>
+                              }
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <button (click)="previewTransitionHandoff(el.id)" class="btn btn-primary w-full px-2 py-1 text-[11px] mt-2" title="Preview outgoing and incoming transition phases">
+                      <i class="fa-solid fa-forward"></i> Preview Full Handoff
+                    </button>
+                  </details>
 
                   @if(getTransitionTimingWarning(el); as warning) {
                     <div class="text-[10px] leading-snug text-amber-200 bg-amber-500/10 border border-amber-400/30 rounded px-2 py-1">

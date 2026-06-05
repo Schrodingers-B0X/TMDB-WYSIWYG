@@ -36,6 +36,45 @@ type ContentAlignY = 'top' | 'center' | 'bottom';
 type StrokePosition = 'inside' | 'outside';
 type RelativeSide = 'right' | 'left' | 'top' | 'bottom' | 'center';
 type TransitionEffect = 'none' | 'fade' | 'slide-left' | 'slide-right' | 'slide-up' | 'slide-down' | 'zoom' | 'blur' | 'flip' | 'bounce';
+type TransitionPreset =
+  | 'none'
+  | 'soft-fade'
+  | 'drop-rise'
+  | 'push-left'
+  | 'push-right'
+  | 'push-up'
+  | 'push-down'
+  | 'blur-lift'
+  | 'zoom-pop'
+  | 'card-flip'
+  | 'bounce-pop'
+  | 'crossfade'
+  | 'cinematic-push'
+  | 'wipe-left'
+  | 'wipe-right'
+  | 'wipe-up'
+  | 'wipe-down'
+  | 'blur-dissolve';
+type TransitionPhase = 'in' | 'out';
+type TransitionPresetOption = {
+  value: TransitionPreset;
+  label: string;
+  description: string;
+  effect: TransitionEffect;
+  lane: 'content' | 'backdrop' | 'both';
+  icon: string;
+};
+type TransitionSettingProp =
+  | 'transitionPreset'
+  | 'transitionEffect'
+  | 'transitionDurationMs'
+  | 'transitionDelayMs'
+  | 'transitionInPreset'
+  | 'transitionInDurationMs'
+  | 'transitionInDelayMs'
+  | 'transitionOutPreset'
+  | 'transitionOutDurationMs'
+  | 'transitionOutDelayMs';
 type SlideshowState = {idx1: number, idx2: number, fade: boolean, resetting?: boolean, sceneFade: boolean, backdrops: string[], items: any[]};
 type DynamicBackdropTransitionState = { currentUrl: string; underlayUrl: string; fade: boolean; resetting?: boolean; version: number };
 type TmdbDetailEntry = { key: string; altKey: string; detail: any };
@@ -109,9 +148,16 @@ interface CanvasElement {
   relativeSide?: RelativeSide;
   relativeGap?: number;
   relativeMatchSize?: boolean;
+  transitionPreset?: TransitionPreset;
   transitionEffect?: TransitionEffect;
   transitionDurationMs?: number;
   transitionDelayMs?: number;
+  transitionInPreset?: TransitionPreset;
+  transitionInDurationMs?: number;
+  transitionInDelayMs?: number;
+  transitionOutPreset?: TransitionPreset;
+  transitionOutDurationMs?: number;
+  transitionOutDelayMs?: number;
   castBubbleSize?: number;
   castCount?: number;
 
@@ -155,6 +201,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   private slideshowRunTokens: Map<string, number> = new Map();
   private slideshowNextSchedulers: Map<string, () => void> = new Map();
   private transitionPreviewTimeouts: Map<string, any> = new Map();
+  private transitionHandoffPreviewTimeouts: Map<string, any> = new Map();
   private dynamicBackdropTransitionTimeouts: Map<string, any> = new Map();
   private posterScrollIntervals: Map<string, any> = new Map();
   private globalSlideshowInterval: any = null;
@@ -225,6 +272,26 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     { value: 'blur', label: 'Blur Fade' },
     { value: 'flip', label: 'Flip' },
     { value: 'bounce', label: 'Bounce' }
+  ];
+  readonly transitionPresetOptions: TransitionPresetOption[] = [
+    { value: 'none', label: 'None', description: 'No motion on item changes.', effect: 'none', lane: 'both', icon: 'fa-ban' },
+    { value: 'soft-fade', label: 'Soft Fade', description: 'A clean opacity fade for quiet layouts.', effect: 'fade', lane: 'content', icon: 'fa-circle-half-stroke' },
+    { value: 'drop-rise', label: 'Drop + Rise', description: 'Current content drops away, next content rises in.', effect: 'slide-up', lane: 'content', icon: 'fa-arrow-up-from-bracket' },
+    { value: 'push-left', label: 'Push Left', description: 'Deck-style slide from right to left.', effect: 'slide-left', lane: 'content', icon: 'fa-arrow-left-long' },
+    { value: 'push-right', label: 'Push Right', description: 'Deck-style slide from left to right.', effect: 'slide-right', lane: 'content', icon: 'fa-arrow-right-long' },
+    { value: 'push-up', label: 'Push Up', description: 'Content exits upward as the next item rises in.', effect: 'slide-up', lane: 'content', icon: 'fa-arrow-up-long' },
+    { value: 'push-down', label: 'Push Down', description: 'Content exits downward as the next item drops in.', effect: 'slide-down', lane: 'content', icon: 'fa-arrow-down-long' },
+    { value: 'blur-lift', label: 'Blur Lift', description: 'A polished blur and rise reveal.', effect: 'blur', lane: 'content', icon: 'fa-wand-magic-sparkles' },
+    { value: 'zoom-pop', label: 'Zoom Pop', description: 'A crisp scale-in with a soft fade.', effect: 'zoom', lane: 'content', icon: 'fa-magnifying-glass-plus' },
+    { value: 'card-flip', label: 'Card Flip', description: 'A short 3D flip for poster/card moments.', effect: 'flip', lane: 'content', icon: 'fa-clone' },
+    { value: 'bounce-pop', label: 'Bounce Pop', description: 'A more playful elastic pop.', effect: 'bounce', lane: 'content', icon: 'fa-bolt' },
+    { value: 'crossfade', label: 'Crossfade', description: 'The safest cinematic background handoff.', effect: 'fade', lane: 'backdrop', icon: 'fa-circle-half-stroke' },
+    { value: 'cinematic-push', label: 'Cinematic Push', description: 'A subtle push zoom that keeps the backdrop filled.', effect: 'zoom', lane: 'backdrop', icon: 'fa-expand' },
+    { value: 'wipe-left', label: 'Wipe Left', description: 'The current backdrop slides left to reveal the next.', effect: 'slide-left', lane: 'backdrop', icon: 'fa-arrow-left-long' },
+    { value: 'wipe-right', label: 'Wipe Right', description: 'The current backdrop slides right to reveal the next.', effect: 'slide-right', lane: 'backdrop', icon: 'fa-arrow-right-long' },
+    { value: 'wipe-up', label: 'Wipe Up', description: 'The current backdrop slides up to reveal the next.', effect: 'slide-up', lane: 'backdrop', icon: 'fa-arrow-up-long' },
+    { value: 'wipe-down', label: 'Wipe Down', description: 'The current backdrop slides down to reveal the next.', effect: 'slide-down', lane: 'backdrop', icon: 'fa-arrow-down-long' },
+    { value: 'blur-dissolve', label: 'Blur Dissolve', description: 'A soft background blur dissolve.', effect: 'blur', lane: 'backdrop', icon: 'fa-droplet' }
   ];
   readonly transitionDurationOptions = [150, 250, 350, 500, 750, 1000, 1500, 2000, 3000, 5000];
   readonly transitionDelayOptions = [0, 100, 250, 500, 1000, 2000];
@@ -337,6 +404,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   slideshowState = signal<{[id: string]: SlideshowState}>({});
   globalSlideshowData = signal<any | null>(null);
   transitionVersions = signal<{[id: string]: number}>({});
+  transitionPhases = signal<{[id: string]: TransitionPhase}>({});
   dynamicBackdropTransitions = signal<{[id: string]: DynamicBackdropTransitionState}>({});
   selectedLayerGroupId = signal<string | null>(null);
   collapsedLayerGroupIds = signal<Record<string, boolean>>({});
@@ -615,6 +683,80 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.transitionEffectOptions.some(option => option.value === value) ? value : 'none';
   }
 
+  private isBackdropTransitionElement(elementOrType: CanvasElement | ElementType | string): boolean {
+    const type = typeof elementOrType === 'string' ? elementOrType : elementOrType.type;
+    return type === 'tmdb-backdrop' || type === 'tmdb-backdrop-slideshow';
+  }
+
+  private getTransitionPresetOption(value: any): TransitionPresetOption | undefined {
+    return this.transitionPresetOptions.find(option => option.value === value);
+  }
+
+  private getLegacyTransitionPreset(effect: any, elementOrType?: CanvasElement | ElementType | string): TransitionPreset {
+    const normalized = this.normalizeTransitionEffect(effect);
+    const isBackdrop = elementOrType ? this.isBackdropTransitionElement(elementOrType) : false;
+    if (normalized === 'none') return 'none';
+
+    if (isBackdrop) {
+      const backdropMap: Record<Exclude<TransitionEffect, 'none'>, TransitionPreset> = {
+        fade: 'crossfade',
+        'slide-left': 'wipe-left',
+        'slide-right': 'wipe-right',
+        'slide-up': 'wipe-up',
+        'slide-down': 'wipe-down',
+        zoom: 'cinematic-push',
+        blur: 'blur-dissolve',
+        flip: 'cinematic-push',
+        bounce: 'cinematic-push'
+      };
+      return backdropMap[normalized];
+    }
+
+    const contentMap: Record<Exclude<TransitionEffect, 'none'>, TransitionPreset> = {
+      fade: 'soft-fade',
+      'slide-left': 'push-left',
+      'slide-right': 'push-right',
+      'slide-up': 'push-up',
+      'slide-down': 'push-down',
+      zoom: 'zoom-pop',
+      blur: 'blur-lift',
+      flip: 'card-flip',
+      bounce: 'bounce-pop'
+    };
+    return contentMap[normalized];
+  }
+
+  private normalizeTransitionPreset(value: any, fallbackEffect?: any, elementOrType?: CanvasElement | ElementType | string): TransitionPreset {
+    const option = this.getTransitionPresetOption(value);
+    const lane = elementOrType && this.isBackdropTransitionElement(elementOrType) ? 'backdrop' : 'content';
+    if (option && (option.lane === 'both' || option.lane === lane)) return option.value;
+    return this.getLegacyTransitionPreset(fallbackEffect, elementOrType);
+  }
+
+  private getTransitionEffectForPreset(preset: TransitionPreset): TransitionEffect {
+    return this.getTransitionPresetOption(preset)?.effect ?? 'none';
+  }
+
+  private getOppositeTransitionPreset(preset: TransitionPreset, elementOrType?: CanvasElement | ElementType | string): TransitionPreset {
+    const isBackdrop = elementOrType ? this.isBackdropTransitionElement(elementOrType) : false;
+    const map: Partial<Record<TransitionPreset, TransitionPreset>> = isBackdrop
+      ? {
+          'wipe-left': 'wipe-right',
+          'wipe-right': 'wipe-left',
+          'wipe-up': 'wipe-down',
+          'wipe-down': 'wipe-up'
+        }
+      : {
+          'drop-rise': 'push-down',
+          'push-left': 'push-right',
+          'push-right': 'push-left',
+          'push-up': 'push-down',
+          'push-down': 'push-up'
+        };
+
+    return map[preset] || preset;
+  }
+
   private normalizeTransitionDurationMs(value: any, fallback = 500): number {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return fallback;
@@ -799,20 +941,28 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     return Math.max(44, this.getCastBubbleSize(element) + 18);
   }
 
-  private getTransitionAnimationName(effect: TransitionEffect, alternate = false): string {
-    const animationNames: Record<TransitionEffect, string> = {
-      none: '',
-      fade: 'tmdbFadeIn',
-      'slide-left': 'tmdbSlideInLeft',
-      'slide-right': 'tmdbSlideInRight',
-      'slide-up': 'tmdbSlideInUp',
-      'slide-down': 'tmdbSlideInDown',
-      zoom: 'tmdbZoomIn',
-      blur: 'tmdbBlurIn',
-      flip: 'tmdbFlipIn',
-      bounce: 'tmdbBounceIn'
+  private getTransitionAnimationName(preset: TransitionPreset, phase: TransitionPhase = 'in', alternate = false): string {
+    const animationNames: Record<TransitionPreset, { in: string; out: string }> = {
+      none: { in: '', out: '' },
+      'soft-fade': { in: 'tmdbSoftFadeIn', out: 'tmdbSoftFadeOut' },
+      'drop-rise': { in: 'tmdbDropRiseIn', out: 'tmdbDropRiseOut' },
+      'push-left': { in: 'tmdbPushLeftIn', out: 'tmdbPushLeftOut' },
+      'push-right': { in: 'tmdbPushRightIn', out: 'tmdbPushRightOut' },
+      'push-up': { in: 'tmdbPushUpIn', out: 'tmdbPushUpOut' },
+      'push-down': { in: 'tmdbPushDownIn', out: 'tmdbPushDownOut' },
+      'blur-lift': { in: 'tmdbBlurLiftIn', out: 'tmdbBlurLiftOut' },
+      'zoom-pop': { in: 'tmdbZoomPopIn', out: 'tmdbZoomPopOut' },
+      'card-flip': { in: 'tmdbCardFlipIn', out: 'tmdbCardFlipOut' },
+      'bounce-pop': { in: 'tmdbBouncePopIn', out: 'tmdbBouncePopOut' },
+      crossfade: { in: 'tmdbSoftFadeIn', out: 'tmdbSoftFadeOut' },
+      'cinematic-push': { in: 'tmdbCinematicPushIn', out: 'tmdbCinematicPushOut' },
+      'wipe-left': { in: 'tmdbPushLeftIn', out: 'tmdbPushLeftOut' },
+      'wipe-right': { in: 'tmdbPushRightIn', out: 'tmdbPushRightOut' },
+      'wipe-up': { in: 'tmdbPushUpIn', out: 'tmdbPushUpOut' },
+      'wipe-down': { in: 'tmdbPushDownIn', out: 'tmdbPushDownOut' },
+      'blur-dissolve': { in: 'tmdbBlurDissolveIn', out: 'tmdbBlurDissolveOut' }
     };
-    const name = animationNames[effect];
+    const name = animationNames[preset]?.[phase] || '';
     return name && alternate ? `${name}Alt` : name;
   }
 
@@ -824,29 +974,55 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     return element;
   }
 
-  getEffectiveTransitionEffect(element: CanvasElement, elements = this.elements()): TransitionEffect {
-    return this.normalizeTransitionEffect(this.getEffectiveTransitionSource(element, elements).transitionEffect);
+  getEffectiveTransitionEffect(element: CanvasElement, elements = this.elements(), phase: TransitionPhase = 'in'): TransitionEffect {
+    return this.getTransitionEffectForPreset(this.getEffectiveTransitionPreset(element, elements, phase));
   }
 
-  getEffectiveTransitionDurationMs(element: CanvasElement, elements = this.elements()): number {
-    return this.normalizeTransitionDurationMs(this.getEffectiveTransitionSource(element, elements).transitionDurationMs, 500);
+  getEffectiveTransitionPreset(element: CanvasElement, elements = this.elements(), phase: TransitionPhase = 'in'): TransitionPreset {
+    const source = this.getEffectiveTransitionSource(element, elements);
+    const basePreset = this.normalizeTransitionPreset(source.transitionPreset, source.transitionEffect, element);
+
+    if (phase === 'out') {
+      return source.transitionOutPreset !== undefined
+        ? this.normalizeTransitionPreset(source.transitionOutPreset, source.transitionEffect, element)
+        : this.getOppositeTransitionPreset(basePreset, element);
+    }
+
+    return source.transitionInPreset !== undefined
+      ? this.normalizeTransitionPreset(source.transitionInPreset, source.transitionEffect, element)
+      : basePreset;
   }
 
-  getEffectiveTransitionDelayMs(element: CanvasElement, elements = this.elements()): number {
-    return this.normalizeTransitionDurationMs(this.getEffectiveTransitionSource(element, elements).transitionDelayMs, 0);
+  getEffectiveTransitionDurationMs(element: CanvasElement, elements = this.elements(), phase: TransitionPhase = 'in'): number {
+    const source = this.getEffectiveTransitionSource(element, elements);
+    const phaseValue = phase === 'out' ? source.transitionOutDurationMs : source.transitionInDurationMs;
+    return this.normalizeTransitionDurationMs(phaseValue ?? source.transitionDurationMs, 500);
   }
 
-  private getTransitionAnimationCss(element: CanvasElement, elements = this.elements(), alternate = false): string | null {
+  getEffectiveTransitionDelayMs(element: CanvasElement, elements = this.elements(), phase: TransitionPhase = 'in'): number {
+    const source = this.getEffectiveTransitionSource(element, elements);
+    const phaseValue = phase === 'out' ? source.transitionOutDelayMs : source.transitionInDelayMs;
+    return this.normalizeTransitionDurationMs(phaseValue ?? source.transitionDelayMs, 0);
+  }
+
+  private getTransitionTimingFunctionForPreset(preset: TransitionPreset, phase: TransitionPhase = 'in'): string {
+    if (preset === 'bounce-pop' && phase === 'in') return 'cubic-bezier(0.34, 1.56, 0.64, 1)';
+    if (preset === 'card-flip') return 'cubic-bezier(0.2, 0.9, 0.2, 1)';
+    if (phase === 'out') return 'cubic-bezier(0.4, 0, 1, 1)';
+    return 'cubic-bezier(0.22, 1, 0.36, 1)';
+  }
+
+  private getTransitionAnimationCss(element: CanvasElement, elements = this.elements(), alternate = false, phase: TransitionPhase = 'in'): string | null {
     if (element.type === 'tmdb-backdrop-slideshow') return null;
-    const effect = this.getEffectiveTransitionEffect(element, elements);
-    if (effect === 'none') return null;
-    return `${this.getTransitionAnimationName(effect, alternate)} ${this.getEffectiveTransitionDurationMs(element, elements)}ms cubic-bezier(0.22, 1, 0.36, 1) ${this.getEffectiveTransitionDelayMs(element, elements)}ms both`;
+    const preset = this.getEffectiveTransitionPreset(element, elements, phase);
+    if (preset === 'none') return null;
+    return `${this.getTransitionAnimationName(preset, phase, alternate)} ${this.getEffectiveTransitionDurationMs(element, elements, phase)}ms ${this.getTransitionTimingFunctionForPreset(preset, phase)} ${this.getEffectiveTransitionDelayMs(element, elements, phase)}ms both`;
   }
 
   getElementAnimation(element: CanvasElement): string | null {
     const version = this.transitionVersions()[element.id] || 0;
     if (!this.previewMode() && version === 0) return null;
-    return this.getTransitionAnimationCss(element, this.elements(), version % 2 === 1);
+    return this.getTransitionAnimationCss(element, this.elements(), version % 2 === 1, this.transitionPhases()[element.id] || 'in');
   }
 
   getBackdropSlideshowStateForElement(element: CanvasElement, elements = this.elements()): SlideshowState | null {
@@ -891,9 +1067,13 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private getBackdropSlideshowRuntimeTransitionMs(master: CanvasElement, elements = this.elements()): number {
+    return this.getBackdropTransitionTotalMs(master, elements);
+  }
+
+  private getBackdropTransitionTotalMs(master: CanvasElement, elements = this.elements()): number {
     return this.getBackdropSlideshowFrameConsumers(master, elements).reduce((maxDuration, el) => {
       return this.isSlideshowTransitionEnabled(el, elements)
-        ? Math.max(maxDuration, this.getEffectiveTransitionDelayMs(el, elements) + this.getEffectiveTransitionDurationMs(el, elements))
+        ? Math.max(maxDuration, this.getTransitionPhaseTotalMs(el, 'in', elements))
         : maxDuration;
     }, 0);
   }
@@ -902,42 +1082,108 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     if (element.type === 'tmdb-backdrop-slideshow') return false;
     if (this.getBackdropSlideshowStateForElement(element)) return false;
     if (this.getDynamicBackdropTransitionState(element)) return false;
-    if (this.getEffectiveTransitionEffect(element) === 'none') return false;
+    if (this.getEffectiveTransitionPreset(element) === 'none') return false;
     const version = this.transitionVersions()[element.id] || 0;
     return this.previewMode() || version > 0;
   }
 
   getElementTransitionClassMap(element: CanvasElement): Record<string, boolean> {
     if (!this.shouldAnimateElementInEditor(element)) return {};
-    const effect = this.getEffectiveTransitionEffect(element);
+    const phase = this.transitionPhases()[element.id] || 'in';
+    const preset = this.getEffectiveTransitionPreset(element, this.elements(), phase);
     const alternate = (this.transitionVersions()[element.id] || 0) % 2 === 1;
     return {
       'tmdb-transition-active': true,
-      [`tmdb-transition-${effect}`]: !alternate,
-      [`tmdb-transition-${effect}-alt`]: alternate
+      [`tmdb-transition-${preset}-${phase}`]: !alternate,
+      [`tmdb-transition-${preset}-${phase}-alt`]: alternate
     };
   }
 
   getElementTransitionDurationStyle(element: CanvasElement): string {
+    const phase = this.transitionPhases()[element.id] || 'in';
     return this.shouldAnimateElementInEditor(element)
-      ? `${this.getEffectiveTransitionDurationMs(element)}ms`
+      ? `${this.getEffectiveTransitionDurationMs(element, this.elements(), phase)}ms`
       : '';
   }
 
   getElementTransitionDelayStyle(element: CanvasElement): string {
+    const phase = this.transitionPhases()[element.id] || 'in';
     return this.shouldAnimateElementInEditor(element)
-      ? `${this.getEffectiveTransitionDelayMs(element)}ms`
+      ? `${this.getEffectiveTransitionDelayMs(element, this.elements(), phase)}ms`
       : '';
   }
 
   getElementTransitionTimingFunction(element: CanvasElement): string {
     return this.shouldAnimateElementInEditor(element)
-      ? 'cubic-bezier(0.22, 1, 0.36, 1)'
+      ? this.getTransitionTimingFunctionForPreset(this.getEffectiveTransitionPreset(element, this.elements(), this.transitionPhases()[element.id] || 'in'), this.transitionPhases()[element.id] || 'in')
       : '';
   }
 
   getElementTransitionFillMode(element: CanvasElement): string {
     return this.shouldAnimateElementInEditor(element) ? 'both' : '';
+  }
+
+  getAvailableTransitionPresetOptions(element: CanvasElement): TransitionPresetOption[] {
+    const lane = this.isBackdropTransitionElement(element) ? 'backdrop' : 'content';
+    return this.transitionPresetOptions.filter(option => option.lane === 'both' || option.lane === lane);
+  }
+
+  getTransitionControlLabel(element: CanvasElement): string {
+    if (element.layoutGroupId && this.getLayoutGroupLockState(element)) return 'Group Motion Preset';
+    if (this.isBackdropTransitionElement(element)) return 'Backdrop Motion Preset';
+    return 'Motion Preset';
+  }
+
+  isTransitionPresetSelected(element: CanvasElement, preset: TransitionPreset): boolean {
+    return this.getEffectiveTransitionPreset(element) === preset;
+  }
+
+  getEffectiveTransitionPresetForPhase(element: CanvasElement, phase: TransitionPhase): TransitionPreset {
+    return this.getEffectiveTransitionPreset(element, this.elements(), phase);
+  }
+
+  getEffectiveTransitionDurationMsForPhase(element: CanvasElement, phase: TransitionPhase): number {
+    return this.getEffectiveTransitionDurationMs(element, this.elements(), phase);
+  }
+
+  getEffectiveTransitionDelayMsForPhase(element: CanvasElement, phase: TransitionPhase): number {
+    return this.getEffectiveTransitionDelayMs(element, this.elements(), phase);
+  }
+
+  getElementTransitionOrigin(element: CanvasElement, elements = this.elements()): string {
+    if (!element.layoutGroupId || !this.getLayoutGroupLockState(element, elements)) return 'center center';
+    const groupSource = this.getLayoutGroupTransitionSource(element, elements);
+    if (!groupSource?.groupTransitionEnabled) return 'center center';
+    const groupElements = this.getLayoutGroupElements(element, elements).filter(el => el.visible);
+    if (groupElements.length < 2) return 'center center';
+
+    const minX = Math.min(...groupElements.map(el => el.x));
+    const minY = Math.min(...groupElements.map(el => el.y));
+    const maxX = Math.max(...groupElements.map(el => el.x + el.width));
+    const maxY = Math.max(...groupElements.map(el => el.y + el.height));
+    const centerX = minX + ((maxX - minX) / 2);
+    const centerY = minY + ((maxY - minY) / 2);
+
+    return `${centerX - element.x}px ${centerY - element.y}px`;
+  }
+
+  private getExportElementTransitionOrigin(element: CanvasElement, elements: CanvasElement[]): string {
+    if (!element.layoutGroupId || !this.getLayoutGroupLockState(element, elements)) return 'center center';
+    const groupSource = this.getLayoutGroupTransitionSource(element, elements);
+    if (!groupSource?.groupTransitionEnabled) return 'center center';
+    const groupElements = this.getLayoutGroupElements(element, elements).filter(el => el.visible);
+    if (groupElements.length < 2) return 'center center';
+
+    const minX = Math.min(...groupElements.map(el => el.x));
+    const minY = Math.min(...groupElements.map(el => el.y));
+    const maxX = Math.max(...groupElements.map(el => el.x + el.width));
+    const maxY = Math.max(...groupElements.map(el => el.y + el.height));
+    const centerX = minX + ((maxX - minX) / 2);
+    const centerY = minY + ((maxY - minY) / 2);
+    const originX = ((centerX - element.x) / Math.max(1, element.width)) * 100;
+    const originY = ((centerY - element.y) / Math.max(1, element.height)) * 100;
+
+    return `${originX.toFixed(2)}% ${originY.toFixed(2)}%`;
   }
 
   private getExpandedTransitionTargetIds(elementIds: string[], elements = this.elements()): string[] {
@@ -947,7 +1193,9 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       if (!element?.layoutGroupId) return;
       if (!this.getLayoutGroupLockState(element, elements)) return;
       const groupSource = this.getLayoutGroupTransitionSource(element, elements);
-      if (!groupSource?.groupTransitionEnabled || this.normalizeTransitionEffect(groupSource.transitionEffect) === 'none') return;
+      const groupHasMotion = this.getEffectiveTransitionPreset(element, elements, 'in') !== 'none'
+        || this.getEffectiveTransitionPreset(element, elements, 'out') !== 'none';
+      if (!groupSource?.groupTransitionEnabled || !groupHasMotion) return;
       elements
         .filter(el => el.layoutGroupId === element.layoutGroupId)
         .forEach(el => idsToTrigger.add(el.id));
@@ -955,7 +1203,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     return Array.from(idsToTrigger);
   }
 
-  private triggerElementTransitions(elementIds: string[]) {
+  private triggerElementTransitions(elementIds: string[], phase: TransitionPhase = 'in') {
     const allElements = this.elements();
     const ids = this.getExpandedTransitionTargetIds(elementIds, allElements);
     if (ids.length === 0) return;
@@ -964,7 +1212,56 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       ids.forEach(id => next[id] = (next[id] || 0) + 1);
       return next;
     });
+    this.transitionPhases.update(phases => {
+      const next = { ...phases };
+      ids.forEach(id => next[id] = phase);
+      return next;
+    });
     this.scheduleElementTransitionPreviewCleanup(ids);
+  }
+
+  previewTransitionPhase(elementId: string, phase: TransitionPhase) {
+    this.triggerElementTransitions([elementId], phase);
+  }
+
+  previewTransitionHandoff(elementId: string) {
+    const timeline = this.getTransitionHandoffTimeline([elementId]);
+    this.clearTransitionHandoffPreviewTimeout(elementId);
+    if (timeline.totalMs <= 0) {
+      this.triggerElementTransitions([elementId], 'in');
+      return;
+    }
+
+    if (timeline.outMs > 0) this.triggerElementTransitions([elementId], 'out');
+    const timeout = setTimeout(() => {
+      this.transitionHandoffPreviewTimeouts.delete(elementId);
+      this.triggerElementTransitions([elementId], 'in');
+    }, timeline.outMs > 0 ? timeline.outMs + 30 : 0);
+    this.transitionHandoffPreviewTimeouts.set(elementId, timeout);
+  }
+
+  useOppositeOutgoingTransition(elementId: string) {
+    const selected = this.elements().find(el => el.id === elementId);
+    if (!selected) return;
+
+    const groupSource = this.getLayoutGroupLockState(selected) ? this.getLayoutGroupTransitionSource(selected) : null;
+    const targetId = groupSource?.id || elementId;
+    this.elements.update(els => els.map(el => {
+      if (el.id !== targetId) return el;
+      const incomingPreset = this.getEffectiveTransitionPreset(el, els, 'in');
+      const outgoingPreset = this.getOppositeTransitionPreset(incomingPreset, el);
+      return {
+        ...el,
+        transitionOutPreset: outgoingPreset,
+        transitionOutDurationMs: this.normalizeTransitionDurationMs(el.transitionOutDurationMs ?? el.transitionInDurationMs ?? el.transitionDurationMs, 500),
+        transitionOutDelayMs: this.normalizeTransitionDurationMs(el.transitionOutDelayMs ?? el.transitionInDelayMs ?? el.transitionDelayMs, 0),
+        groupTransitionEnabled: el.layoutGroupId && this.getLayoutGroupLockState(selected)
+          ? outgoingPreset !== 'none' || this.getEffectiveTransitionPreset(el, els, 'in') !== 'none'
+          : el.groupTransitionEnabled
+      };
+    }));
+    this.saveStateToHistory();
+    this.previewTransitionHandoff(elementId);
   }
 
   private clearElementTransitionPreviewTimeout(elementId: string) {
@@ -974,20 +1271,36 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     this.transitionPreviewTimeouts.delete(elementId);
   }
 
+  private clearTransitionHandoffPreviewTimeout(elementId: string) {
+    const timeout = this.transitionHandoffPreviewTimeouts.get(elementId);
+    if (!timeout) return;
+    clearTimeout(timeout);
+    this.transitionHandoffPreviewTimeouts.delete(elementId);
+  }
+
   private clearElementTransitionPreviews(elementId?: string) {
     if (elementId) {
       this.clearElementTransitionPreviewTimeout(elementId);
+      this.clearTransitionHandoffPreviewTimeout(elementId);
       this.transitionVersions.update(versions => {
         if (!versions[elementId]) return versions;
         const { [elementId]: _removed, ...rest } = versions;
+        return rest;
+      });
+      this.transitionPhases.update(phases => {
+        if (!phases[elementId]) return phases;
+        const { [elementId]: _removed, ...rest } = phases;
         return rest;
       });
       return;
     }
 
     this.transitionPreviewTimeouts.forEach(timeout => clearTimeout(timeout));
+    this.transitionHandoffPreviewTimeouts.forEach(timeout => clearTimeout(timeout));
     this.transitionPreviewTimeouts.clear();
+    this.transitionHandoffPreviewTimeouts.clear();
     this.transitionVersions.set({});
+    this.transitionPhases.set({});
   }
 
   private scheduleElementTransitionPreviewCleanup(elementIds: string[]) {
@@ -999,7 +1312,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       this.clearElementTransitionPreviewTimeout(id);
       const element = elements.find(el => el.id === id);
       const transitionMs = element
-        ? this.getEffectiveTransitionDelayMs(element, elements) + this.getEffectiveTransitionDurationMs(element, elements)
+        ? this.getTransitionPhaseTotalMs(element, this.transitionPhases()[id] || 'in', elements)
         : 500;
 
       const timeout = setTimeout(() => {
@@ -1009,11 +1322,37 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
           const { [id]: _removed, ...rest } = versions;
           return rest;
         });
+        this.transitionPhases.update(phases => {
+          if (!phases[id]) return phases;
+          const { [id]: _removed, ...rest } = phases;
+          return rest;
+        });
         this.cdr.detectChanges();
       }, Math.max(0, transitionMs) + 80);
 
       this.transitionPreviewTimeouts.set(id, timeout);
     });
+  }
+
+  private getTransitionPhaseTotalMs(element: CanvasElement, phase: TransitionPhase = 'in', elements = this.elements()): number {
+    if (this.getEffectiveTransitionPreset(element, elements, phase) === 'none') return 0;
+    return this.getEffectiveTransitionDelayMs(element, elements, phase) + this.getEffectiveTransitionDurationMs(element, elements, phase);
+  }
+
+  private getTransitionPhaseMaxMs(elementIds: string[], phase: TransitionPhase = 'in', elements = this.elements()): number {
+    const ids = this.getExpandedTransitionTargetIds(elementIds, elements);
+    return ids.reduce((maxDuration, id) => {
+      const element = elements.find(el => el.id === id);
+      if (!element) return maxDuration;
+      return Math.max(maxDuration, this.getTransitionPhaseTotalMs(element, phase, elements));
+    }, 0);
+  }
+
+  private getTransitionHandoffTimeline(elementIds: string[], elements = this.elements()): { ids: string[]; outMs: number; inMs: number; totalMs: number } {
+    const ids = this.getExpandedTransitionTargetIds(elementIds, elements);
+    const outMs = this.getTransitionPhaseMaxMs(ids, 'out', elements);
+    const inMs = this.getTransitionPhaseMaxMs(ids, 'in', elements);
+    return { ids, outMs, inMs, totalMs: outMs + inMs };
   }
 
   private createSlideshowRunToken(elementId: string): number {
@@ -1033,15 +1372,30 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     map.delete(elementId);
   }
 
-  private scheduleSlideshowCompletion(elementId: string, delayMs: number, runToken: number | undefined, onComplete?: () => void) {
+  private scheduleSlideshowCompletion(
+    elementId: string,
+    delayMs: number,
+    runToken: number | undefined,
+    onComplete?: () => void,
+    advanceBackdrop = true
+  ) {
     this.clearSlideshowTimeout(this.slideshowTransitionTimeouts, elementId);
     const timeout = setTimeout(() => {
       this.slideshowTransitionTimeouts.delete(elementId);
       if (!this.isCurrentSlideshowRun(elementId, runToken)) return;
-      this.completeSlideshowTransition(elementId, runToken);
+      if (advanceBackdrop) this.completeSlideshowTransition(elementId, runToken);
       onComplete?.();
     }, Math.max(0, delayMs));
     this.slideshowTransitionTimeouts.set(elementId, timeout);
+  }
+
+  private scheduleSlideshowFrameSwap(elementId: string, delayMs: number, runToken: number | undefined) {
+    setTimeout(() => {
+      if (!this.isCurrentSlideshowRun(elementId, runToken)) return;
+      const state = this.slideshowState()[elementId];
+      if (!state || state.fade || state.resetting) return;
+      this.completeSlideshowTransition(elementId, runToken);
+    }, Math.max(0, delayMs));
   }
 
   private completeSlideshowTransition(elementId: string, runToken?: number) {
@@ -1079,37 +1433,6 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     });
   }
 
-  private previewSlideshowTransition(elementId: string): boolean {
-    const element = this.elements().find(e => e.id === elementId);
-    const state = this.slideshowState()[elementId];
-    if (!element || element.type !== 'tmdb-backdrop-slideshow' || !state || state.backdrops.length < 2) return false;
-    if (state.fade || state.resetting || !this.isSlideshowTransitionEnabled(element)) return false;
-
-    const runToken = this.slideshowRunTokens.get(elementId);
-    const transitionMs = this.getBackdropSlideshowRuntimeTransitionMs(element);
-    if (transitionMs <= 0) return false;
-    void this.preloadSlideshowImage(state.backdrops[state.idx2]).then(() => {
-      if (!this.isCurrentSlideshowRun(elementId, runToken)) return;
-      const latestEl = this.elements().find(e => e.id === elementId);
-      const latestState = this.slideshowState()[elementId];
-      if (!latestEl || !latestState || latestState.fade || latestState.resetting || this.getBackdropSlideshowRuntimeTransitionMs(latestEl) <= 0) return;
-
-      const nextItem = latestState.items[latestState.idx2];
-      if (nextItem) this.propagateSourceItemToLinkedGroup(elementId, latestEl, nextItem, true);
-
-      this.clearSlideshowTimeout(this.slideshowIntervals, elementId);
-      this.slideshowState.update(s => {
-        const current = s[elementId];
-        return current ? { ...s, [elementId]: { ...current, fade: true, resetting: false, sceneFade: false } } : s;
-      });
-      this.cdr.detectChanges();
-
-      this.scheduleSlideshowCompletion(elementId, transitionMs + 50, runToken, () => this.slideshowNextSchedulers.get(elementId)?.());
-    });
-
-    return true;
-  }
-
   isSlideshowTransitionEnabled(element: CanvasElement, elements = this.elements()): boolean {
     const effect = this.getEffectiveTransitionEffect(element, elements);
     return effect !== 'none' && this.getEffectiveTransitionDurationMs(element, elements) > 0;
@@ -1123,9 +1446,10 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     if (!this.isSlideshowTransitionEnabled(element)) return 'none';
     const duration = this.getEffectiveTransitionDurationMs(element);
     const delay = this.getEffectiveTransitionDelayMs(element);
+    const timing = this.getTransitionTimingFunctionForPreset(this.getEffectiveTransitionPreset(element));
     return [
       `opacity ${duration}ms ease-in-out ${delay}ms`,
-      `transform ${duration}ms cubic-bezier(0.22, 1, 0.36, 1) ${delay}ms`,
+      `transform ${duration}ms ${timing} ${delay}ms`,
       `filter ${duration}ms ease-in-out ${delay}ms`
     ].join(', ');
   }
@@ -1182,21 +1506,28 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   getTransitionTimingWarning(element: CanvasElement): string | null {
-    if (this.getEffectiveTransitionEffect(element) === 'none') return null;
+    const incomingMs = this.getTransitionPhaseTotalMs(element, 'in');
+    const outgoingMs = this.getTransitionPhaseTotalMs(element, 'out');
+    if (incomingMs <= 0 && outgoingMs <= 0) return null;
     const master = this.getSlideshowMasterForElement(element);
     if (!master) return null;
 
     const slideshowMs = this.getEffectiveSlideshowDurationMs(master);
-    const transitionMs = this.getEffectiveTransitionDurationMs(element);
-    const totalMs = transitionMs + this.getEffectiveTransitionDelayMs(element);
-    if (transitionMs > slideshowMs) return 'Transition duration is longer than the slide duration.';
-    if (totalMs > slideshowMs) return 'Delay plus duration exceeds the slide duration.';
+    const longestPhaseMs = Math.max(incomingMs, outgoingMs);
+    const handoffMs = incomingMs + outgoingMs;
+    if (longestPhaseMs > slideshowMs) return 'A transition phase is longer than the slide duration.';
+    if (handoffMs > slideshowMs) return 'Outgoing plus incoming transition time exceeds the slide duration.';
     return null;
   }
 
   isGroupTransitionEnabled(element: CanvasElement): boolean {
     const groupSource = this.getLayoutGroupTransitionSource(element);
-    return !!groupSource?.groupTransitionEnabled && this.getLayoutGroupLockState(element) && this.normalizeTransitionEffect(groupSource.transitionEffect) !== 'none';
+    return !!groupSource?.groupTransitionEnabled
+      && this.getLayoutGroupLockState(element)
+      && (
+        this.getEffectiveTransitionPreset(element, this.elements(), 'in') !== 'none'
+        || this.getEffectiveTransitionPreset(element, this.elements(), 'out') !== 'none'
+      );
   }
 
   isSyncedWithLayer(element: CanvasElement): boolean {
@@ -1889,6 +2220,15 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     const contentStrokeEnabled = typeof element.styles?.contentStrokeEnabled === 'boolean'
       ? element.styles.contentStrokeEnabled
       : normalizedContentStrokeWidth > 0;
+    const transitionPreset = this.normalizeTransitionPreset(element.transitionPreset, element.transitionEffect, element.type);
+    const transitionInPreset = element.transitionInPreset !== undefined
+      ? this.normalizeTransitionPreset(element.transitionInPreset, element.transitionEffect, element.type)
+      : transitionPreset;
+    const transitionOutPreset = element.transitionOutPreset !== undefined
+      ? this.normalizeTransitionPreset(element.transitionOutPreset, element.transitionEffect, element.type)
+      : this.getOppositeTransitionPreset(transitionInPreset || transitionPreset, element.type);
+    const transitionDurationMs = this.normalizeTransitionDurationMs(element.transitionDurationMs, 500);
+    const transitionDelayMs = this.normalizeTransitionDurationMs(element.transitionDelayMs, 0);
     const normalized: CanvasElement = {
       ...rest,
       styles: {
@@ -1922,9 +2262,16 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       relativeSide: element.relativeToElementId ? this.normalizeRelativeSide(element.relativeSide) : undefined,
       relativeGap: element.relativeToElementId ? this.normalizeRelativeGap(element.relativeGap) : undefined,
       relativeMatchSize: element.relativeToElementId ? !!element.relativeMatchSize : undefined,
-      transitionEffect: this.normalizeTransitionEffect(element.transitionEffect),
-      transitionDurationMs: this.normalizeTransitionDurationMs(element.transitionDurationMs, 500),
-      transitionDelayMs: this.normalizeTransitionDurationMs(element.transitionDelayMs, 0),
+      transitionPreset,
+      transitionEffect: this.getTransitionEffectForPreset(transitionPreset),
+      transitionDurationMs,
+      transitionDelayMs,
+      transitionInPreset,
+      transitionInDurationMs: this.normalizeTransitionDurationMs(element.transitionInDurationMs ?? transitionDurationMs, 500),
+      transitionInDelayMs: this.normalizeTransitionDurationMs(element.transitionInDelayMs ?? transitionDelayMs, 0),
+      transitionOutPreset,
+      transitionOutDurationMs: this.normalizeTransitionDurationMs(element.transitionOutDurationMs ?? transitionDurationMs, 500),
+      transitionOutDelayMs: this.normalizeTransitionDurationMs(element.transitionOutDelayMs ?? transitionDelayMs, 0),
       groupTransitionEnabled: !!element.groupTransitionEnabled,
       castBubbleSize: element.type === 'tmdb-cast' ? this.normalizeCastBubbleSize(element.castBubbleSize) : element.castBubbleSize,
       castCount: element.type === 'tmdb-cast' ? this.normalizeCastCount(element.castCount) : element.castCount
@@ -2140,7 +2487,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private clearGlobalSlideshowRuntime(clearData = true) {
     if (this.globalSlideshowInterval) {
-      clearInterval(this.globalSlideshowInterval);
+      clearTimeout(this.globalSlideshowInterval);
       this.globalSlideshowInterval = null;
     }
     this.clearDynamicBackdropTransitions();
@@ -2224,9 +2571,16 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       snapToGrid: false,
       snapIncrement: this.defaultSnapIncrement,
       maintainAspectRatio: type === 'tmdb-poster',
+      transitionPreset: 'none',
       transitionEffect: 'none',
       transitionDurationMs: 500,
       transitionDelayMs: 0,
+      transitionInPreset: 'none',
+      transitionInDurationMs: 500,
+      transitionInDelayMs: 0,
+      transitionOutPreset: 'none',
+      transitionOutDurationMs: 500,
+      transitionOutDelayMs: 0,
       castBubbleSize: type === 'tmdb-cast' ? 48 : undefined,
       castCount: type === 'tmdb-cast' ? this.defaultCastCount : undefined,
       linkGroup: isTmdbElement ? this.defaultCollectionLinkGroup : '',
@@ -2432,6 +2786,21 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     const maxY = Math.max(...groupElements.map(el => el.y + el.height));
     const minZ = Math.min(...groupElements.map(el => el.zIndex));
     const backgroundZ = Math.max(1, minZ - 1);
+    const sourcePreset = source?.groupTransitionEnabled
+      ? this.normalizeTransitionPreset(source.transitionPreset, source.transitionEffect, 'shape')
+      : 'none';
+    const sourceInPreset = source?.groupTransitionEnabled
+      ? (source.transitionInPreset !== undefined
+        ? this.normalizeTransitionPreset(source.transitionInPreset, source.transitionEffect, 'shape')
+        : sourcePreset)
+      : 'none';
+    const sourceOutPreset = source?.groupTransitionEnabled
+      ? (source.transitionOutPreset !== undefined
+        ? this.normalizeTransitionPreset(source.transitionOutPreset, source.transitionEffect, 'shape')
+        : this.getOppositeTransitionPreset(sourceInPreset, 'shape'))
+      : 'none';
+    const sourceDurationMs = this.normalizeTransitionDurationMs(source?.transitionDurationMs, 500);
+    const sourceDelayMs = this.normalizeTransitionDurationMs(source?.transitionDelayMs, 0);
 
     return {
       id: `el_${Date.now()}`,
@@ -2484,9 +2853,16 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       groupLocked,
       groupPadding: padding,
       groupTransitionEnabled: !!source?.groupTransitionEnabled,
-      transitionEffect: source?.groupTransitionEnabled ? this.normalizeTransitionEffect(source.transitionEffect) : 'none',
-      transitionDurationMs: this.normalizeTransitionDurationMs(source?.transitionDurationMs, 500),
-      transitionDelayMs: this.normalizeTransitionDurationMs(source?.transitionDelayMs, 0),
+      transitionPreset: sourcePreset,
+      transitionEffect: this.getTransitionEffectForPreset(sourcePreset),
+      transitionDurationMs: sourceDurationMs,
+      transitionDelayMs: sourceDelayMs,
+      transitionInPreset: sourceInPreset,
+      transitionInDurationMs: this.normalizeTransitionDurationMs(source?.transitionInDurationMs ?? sourceDurationMs, 500),
+      transitionInDelayMs: this.normalizeTransitionDurationMs(source?.transitionInDelayMs ?? sourceDelayMs, 0),
+      transitionOutPreset: sourceOutPreset,
+      transitionOutDurationMs: this.normalizeTransitionDurationMs(source?.transitionOutDurationMs ?? sourceDurationMs, 500),
+      transitionOutDelayMs: this.normalizeTransitionDurationMs(source?.transitionOutDelayMs ?? sourceDelayMs, 0),
       linkGroup: '',
       dataPath: '',
       dataPrefix: '',
@@ -3131,7 +3507,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     this.saveStateToHistory();
   }
 
-  updateTransitionSetting(elementId: string, prop: 'transitionEffect' | 'transitionDurationMs' | 'transitionDelayMs', value: any) {
+  updateTransitionSetting(elementId: string, prop: TransitionSettingProp, value: any) {
     const selected = this.elements().find(el => el.id === elementId);
     if (!selected) return;
 
@@ -3139,25 +3515,97 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     const targetId = groupSource?.id || elementId;
     this.elements.update(els => els.map(el => {
       if (el.id !== targetId) return el;
-      const nextValue = prop === 'transitionEffect'
-        ? this.normalizeTransitionEffect(value)
-        : this.normalizeTransitionDurationMs(value, prop === 'transitionDelayMs' ? 0 : 500);
-      return {
-        ...el,
-        [prop]: nextValue,
-        groupTransitionEnabled: el.layoutGroupId && this.getLayoutGroupLockState(selected)
-          ? this.normalizeTransitionEffect(prop === 'transitionEffect' ? nextValue : el.transitionEffect) !== 'none'
-          : el.groupTransitionEnabled
+      const isGroupTransitionTarget = !!(el.layoutGroupId && this.getLayoutGroupLockState(selected));
+      const withGroupTransitionState = (next: CanvasElement): CanvasElement => {
+        if (!isGroupTransitionTarget) return next;
+        const incomingPreset = this.normalizeTransitionPreset(next.transitionInPreset ?? next.transitionPreset, next.transitionEffect, next);
+        const outgoingPreset = next.transitionOutPreset !== undefined
+          ? this.normalizeTransitionPreset(next.transitionOutPreset, next.transitionEffect, next)
+          : this.getOppositeTransitionPreset(incomingPreset, next);
+        return {
+          ...next,
+          groupTransitionEnabled: incomingPreset !== 'none' || outgoingPreset !== 'none'
+        };
       };
+
+      if (prop === 'transitionPreset' || prop === 'transitionEffect') {
+        const currentIncomingPreset = this.getEffectiveTransitionPreset(el, els, 'in');
+        const currentDerivedOutPreset = this.getOppositeTransitionPreset(currentIncomingPreset, el);
+        const currentOutPreset = el.transitionOutPreset !== undefined
+          ? this.normalizeTransitionPreset(el.transitionOutPreset, el.transitionEffect, el)
+          : currentDerivedOutPreset;
+        const nextPreset = prop === 'transitionPreset'
+          ? this.normalizeTransitionPreset(value, undefined, el)
+          : this.getLegacyTransitionPreset(value, el);
+        const nextOutPreset = el.transitionOutPreset === undefined || currentOutPreset === currentDerivedOutPreset
+          ? this.getOppositeTransitionPreset(nextPreset, el)
+          : currentOutPreset;
+        return withGroupTransitionState({
+          ...el,
+          transitionPreset: nextPreset,
+          transitionEffect: this.getTransitionEffectForPreset(nextPreset),
+          transitionInPreset: nextPreset,
+          transitionInDurationMs: this.normalizeTransitionDurationMs(el.transitionInDurationMs ?? el.transitionDurationMs, 500),
+          transitionInDelayMs: this.normalizeTransitionDurationMs(el.transitionInDelayMs ?? el.transitionDelayMs, 0),
+          transitionOutPreset: nextOutPreset,
+          transitionOutDurationMs: this.normalizeTransitionDurationMs(el.transitionOutDurationMs ?? el.transitionDurationMs ?? el.transitionInDurationMs, 500),
+          transitionOutDelayMs: this.normalizeTransitionDurationMs(el.transitionOutDelayMs ?? el.transitionDelayMs ?? el.transitionInDelayMs, 0)
+        });
+      }
+
+      if (prop === 'transitionInPreset') {
+        const currentIncomingPreset = this.getEffectiveTransitionPreset(el, els, 'in');
+        const currentDerivedOutPreset = this.getOppositeTransitionPreset(currentIncomingPreset, el);
+        const currentOutPreset = el.transitionOutPreset !== undefined
+          ? this.normalizeTransitionPreset(el.transitionOutPreset, el.transitionEffect, el)
+          : currentDerivedOutPreset;
+        const nextPreset = this.normalizeTransitionPreset(value, undefined, el);
+        return withGroupTransitionState({
+          ...el,
+          transitionPreset: nextPreset,
+          transitionEffect: this.getTransitionEffectForPreset(nextPreset),
+          transitionInPreset: nextPreset,
+          transitionOutPreset: el.transitionOutPreset === undefined || currentOutPreset === currentDerivedOutPreset
+            ? this.getOppositeTransitionPreset(nextPreset, el)
+            : currentOutPreset
+        });
+      }
+
+      if (prop === 'transitionOutPreset') {
+        return withGroupTransitionState({
+          ...el,
+          transitionOutPreset: this.normalizeTransitionPreset(value, undefined, el)
+        });
+      }
+
+      const isDelaySetting = prop === 'transitionDelayMs' || prop === 'transitionInDelayMs' || prop === 'transitionOutDelayMs';
+      const nextValue = this.normalizeTransitionDurationMs(value, isDelaySetting ? 0 : 500);
+      if (prop === 'transitionDurationMs') {
+        return withGroupTransitionState({
+          ...el,
+          transitionDurationMs: nextValue,
+          transitionInDurationMs: nextValue,
+          transitionOutDurationMs: nextValue
+        });
+      }
+
+      if (prop === 'transitionDelayMs') {
+        return withGroupTransitionState({
+          ...el,
+          transitionDelayMs: nextValue,
+          transitionInDelayMs: nextValue,
+          transitionOutDelayMs: nextValue
+        });
+      }
+
+      return withGroupTransitionState({
+        ...el,
+        [prop]: nextValue
+      });
     }));
     this.saveStateToHistory();
 
-    const latestElements = this.elements();
-    const latestTarget = latestElements.find(el => el.id === targetId);
-    if (latestTarget?.type === 'tmdb-backdrop-slideshow' && this.previewSlideshowTransition(latestTarget.id)) return;
-    const backdropMaster = latestTarget ? this.getBackdropSlideshowMasterForElement(latestTarget, latestElements) : null;
-    if (backdropMaster && this.previewSlideshowTransition(backdropMaster.id)) return;
-    this.triggerElementTransitions([elementId]);
+    this.triggerElementTransitions([elementId], prop.startsWith('transitionOut') ? 'out' : 'in');
   }
 
   private getGlobalDiscoverFiltersForType(type: TmdbCollectionType): DiscoverFilters {
@@ -3462,8 +3910,8 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     };
   }
 
-  private propagateSourceItemToLinkedGroup(sourceElementId: string, sourceEl: CanvasElement, item: any, animateTargets = false) {
-    if (!sourceEl.linkGroup || !item?.id) return;
+  private propagateSourceItemToLinkedGroup(sourceElementId: string, sourceEl: CanvasElement, item: any, animateTargets = false): number {
+    if (!sourceEl.linkGroup || !item?.id) return 0;
     const itemType = this.resolveItemTypeFromSourceItem(item, sourceEl.tmdbCollectionType || sourceEl.tmdbItemType);
     const detail = this.getCollectionItemDetail(sourceEl, item);
     const transitionTargetIds = this.elements()
@@ -3489,16 +3937,44 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       }));
     };
 
-    applyUpdate();
-    if (animateTargets) this.triggerElementTransitions(transitionTargetIds);
-
-    if (!hasEnrichedDetail) {
+    const fetchMissingDetail = () => {
+      if (hasEnrichedDetail) return;
       this.elements().forEach(el => {
         if (el.linkGroup === sourceEl.linkGroup && el.id !== sourceElementId && !this.isCollectionElement(el)) {
           this.fetchTmdbDataForElement(el.id);
         }
       });
+    };
+
+    if (!animateTargets) {
+      applyUpdate();
+      fetchMissingDetail();
+      return 0;
     }
+
+    const timeline = this.getTransitionHandoffTimeline(transitionTargetIds);
+    if (timeline.totalMs <= 0) {
+      applyUpdate();
+      this.triggerElementTransitions(timeline.ids, 'in');
+      fetchMissingDetail();
+      return 0;
+    }
+
+    if (timeline.outMs <= 0) {
+      applyUpdate();
+      if (timeline.inMs > 0) this.triggerElementTransitions(timeline.ids, 'in');
+      fetchMissingDetail();
+      return timeline.inMs;
+    }
+
+    this.triggerElementTransitions(timeline.ids, 'out');
+    setTimeout(() => {
+      applyUpdate();
+      if (timeline.inMs > 0) this.triggerElementTransitions(timeline.ids, 'in');
+      fetchMissingDetail();
+      this.cdr.detectChanges();
+    }, timeline.outMs + 30);
+    return timeline.totalMs + 30;
   }
 
   syncElementWithLayer(elementId: string, targetId: string) {
@@ -3851,11 +4327,18 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     if (items.length === 0 || !this.hasGlobalSlideshowTargets()) return;
 
     this.globalSlideshowIndex = 0;
-    void this.propagateGlobalSlideshowItem(items[0], runToken);
+    void this.propagateGlobalSlideshowItem(items[0], runToken, false);
     if (items.length < 2) return;
 
     const durationMs = this.globalSlideshowDurationMs();
-    this.globalSlideshowInterval = setInterval(() => {
+    const scheduleNext = (delayMs: number) => {
+      if (this.globalSlideshowInterval) clearTimeout(this.globalSlideshowInterval);
+      this.globalSlideshowInterval = setTimeout(() => {
+        void advanceSlide();
+      }, Math.max(0, delayMs));
+    };
+
+    const advanceSlide = async () => {
       if (this.globalSlideshowRunToken !== runToken) return;
       const latestItems = this.getGlobalSlideshowItems();
       if (latestItems.length === 0 || !this.hasGlobalSlideshowTargets()) {
@@ -3863,23 +4346,33 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         return;
       }
       this.globalSlideshowIndex = (this.globalSlideshowIndex + 1) % latestItems.length;
-      void this.propagateGlobalSlideshowItem(latestItems[this.globalSlideshowIndex], runToken);
-    }, durationMs);
+      const handoffMs = await this.propagateGlobalSlideshowItem(latestItems[this.globalSlideshowIndex], runToken, true);
+      if (this.globalSlideshowRunToken !== runToken) return;
+      scheduleNext(durationMs + handoffMs);
+    };
+
+    scheduleNext(durationMs);
   }
 
-  private async propagateGlobalSlideshowItem(item: any, runToken = this.globalSlideshowRunToken) {
-    await this.applyGlobalSlideshowItemToTargets(item, undefined, runToken, true);
+  private async propagateGlobalSlideshowItem(item: any, runToken = this.globalSlideshowRunToken, animateTargets = true): Promise<number> {
+    return this.applyGlobalSlideshowItemToTargets(item, undefined, runToken, true, animateTargets);
   }
 
   private async syncGlobalSlideshowTargetsToCurrentItem(targetIds: string[]) {
     if (targetIds.length === 0 || !this.globalSlideshowData()) return;
     const currentItem = this.getCurrentGlobalSlideshowItem();
     if (!currentItem) return;
-    await this.applyGlobalSlideshowItemToTargets(currentItem, new Set(targetIds), this.globalSlideshowRunToken, false);
+    await this.applyGlobalSlideshowItemToTargets(currentItem, new Set(targetIds), this.globalSlideshowRunToken, false, false);
   }
 
-  private async applyGlobalSlideshowItemToTargets(item: any, targetIdFilter?: Set<string>, runToken = this.globalSlideshowRunToken, cancelPreviousApplies = true) {
-    if (!item?.id) return;
+  private async applyGlobalSlideshowItemToTargets(
+    item: any,
+    targetIdFilter?: Set<string>,
+    runToken = this.globalSlideshowRunToken,
+    cancelPreviousApplies = true,
+    animateTargets = true
+  ): Promise<number> {
+    if (!item?.id) return 0;
 
     const data = this.globalSlideshowData();
     const fallbackType = (data?.__collectionType || this.globalCollectionType()) as TmdbCollectionType;
@@ -3891,28 +4384,67 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
       .filter(el => !targetIdFilter || targetIdFilter.has(el.id));
     const targetIds = targets.map(el => el.id);
 
-    if (targetIds.length === 0) return;
+    if (targetIds.length === 0) return 0;
     const applySequence = cancelPreviousApplies ? ++this.globalSlideshowApplySequence : this.globalSlideshowApplySequence;
     await this.preloadGlobalTargetMedia(targets, detail);
-    if (this.globalSlideshowRunToken !== runToken) return;
-    if (cancelPreviousApplies && this.globalSlideshowApplySequence !== applySequence) return;
+    if (this.globalSlideshowRunToken !== runToken) return 0;
+    if (cancelPreviousApplies && this.globalSlideshowApplySequence !== applySequence) return 0;
 
+    const stagedDataTargetIds = animateTargets
+      ? targets
+        .filter(el => el.type !== 'tmdb-backdrop' && el.type !== 'tmdb-backdrop-slideshow' && el.type !== 'tmdb-poster-scroll')
+        .map(el => el.id)
+      : [];
+    const stagedDataTargetIdSet = new Set(stagedDataTargetIds);
+    const immediateTargetIdSet = new Set(targetIds.filter(id => !stagedDataTargetIdSet.has(id)));
+    const timeline = animateTargets
+      ? this.getTransitionHandoffTimeline(stagedDataTargetIds)
+      : { ids: [], outMs: 0, inMs: 0, totalMs: 0 };
     const stagedBackdropIds = new Set(this.prepareDynamicBackdropTransitions(targets, detail));
-    this.elements.update(els => els.map(el => {
-      if (targetIdFilter && !targetIdFilter.has(el.id)) return el;
-      if (!this.isGlobalSlideshowTarget(el, els)) return el;
-      return {
-        ...el,
-        tmdbId: String(item.id),
-        tmdbItemType: itemType,
-        tmdbCollectionType: itemType === 'tv' ? 'tv' : 'movie',
-        tmdbEndpoint: undefined,
-        tmdbData: detail
-      };
-    }));
-    this.triggerElementTransitions(targetIds);
-    this.cdr.detectChanges();
+    const immediateTransitionMs = animateTargets
+      ? targets
+        .filter(el => immediateTargetIdSet.has(el.id))
+        .reduce((maxTotal, el) => Math.max(maxTotal, this.getTransitionPhaseTotalMs(el, 'in')), 0)
+      : 0;
+
+    const applyUpdate = (ids: Set<string>) => {
+      if (ids.size === 0) return;
+      this.elements.update(els => els.map(el => {
+        if (!ids.has(el.id)) return el;
+        if (targetIdFilter && !targetIdFilter.has(el.id)) return el;
+        if (!this.isGlobalSlideshowTarget(el, els)) return el;
+        return {
+          ...el,
+          tmdbId: String(item.id),
+          tmdbItemType: itemType,
+          tmdbCollectionType: itemType === 'tv' ? 'tv' : 'movie',
+          tmdbEndpoint: undefined,
+          tmdbData: detail
+        };
+      }));
+    };
+
+    applyUpdate(immediateTargetIdSet);
     this.startDynamicBackdropTransitions(Array.from(stagedBackdropIds));
+
+    if (!animateTargets || timeline.totalMs <= 0 || timeline.outMs <= 0) {
+      applyUpdate(stagedDataTargetIdSet);
+      this.triggerElementTransitions(targetIds, 'in');
+      this.cdr.detectChanges();
+      return animateTargets ? Math.max(immediateTransitionMs, timeline.inMs) : 0;
+    }
+
+    this.triggerElementTransitions(timeline.ids, 'out');
+    this.cdr.detectChanges();
+    setTimeout(() => {
+      if (this.globalSlideshowRunToken !== runToken) return;
+      if (cancelPreviousApplies && this.globalSlideshowApplySequence !== applySequence) return;
+      applyUpdate(stagedDataTargetIdSet);
+      if (timeline.inMs > 0) this.triggerElementTransitions(timeline.ids, 'in');
+      this.cdr.detectChanges();
+    }, timeline.outMs + 30);
+
+    return Math.max(immediateTransitionMs, timeline.totalMs + 30);
   }
 
   searchTmdb(query: string) { this.searchTerms.next(query); }
@@ -4274,7 +4806,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
     this.clearDynamicBackdropTransitionTimeout(elementId);
     const element = this.elements().find(el => el.id === elementId);
     const transitionMs = element
-      ? this.getEffectiveTransitionDelayMs(element) + this.getEffectiveTransitionDurationMs(element)
+      ? this.getTransitionPhaseTotalMs(element, 'in')
       : 500;
 
     const timeout = setTimeout(() => {
@@ -4344,26 +4876,36 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
           }
 
           const nextItem = latestState.items[latestState.idx2];
-          if (nextItem) this.propagateSourceItemToLinkedGroup(elementId, latestEl, nextItem, true);
+          const linkedTargetIds = latestEl.linkGroup
+            ? this.elements()
+              .filter(linkedEl => linkedEl.linkGroup === latestEl.linkGroup && linkedEl.id !== elementId && !this.isCollectionElement(linkedEl))
+              .map(linkedEl => linkedEl.id)
+            : [];
+          const linkedTimeline = nextItem ? this.getTransitionHandoffTimeline(linkedTargetIds) : { ids: [], outMs: 0, inMs: 0, totalMs: 0 };
+          const linkedHandoffMs = nextItem ? this.propagateSourceItemToLinkedGroup(elementId, latestEl, nextItem, true) : 0;
+          const backdropTransitionMs = this.getBackdropTransitionTotalMs(latestEl);
+          const handoffMs = Math.max(backdropTransitionMs, linkedHandoffMs);
 
-          const transitionMs = this.getBackdropSlideshowRuntimeTransitionMs(latestEl);
-
-          if (transitionMs <= 0) {
+          if (handoffMs <= 0) {
             this.completeSlideshowTransition(elementId, runToken);
             isAdvancing = false;
             scheduleNextSlide();
             return;
           }
 
-          this.slideshowState.update(s => {
-            const current = s[elementId];
-            return current ? {...s, [elementId]: { ...current, fade: true, resetting: false, sceneFade: false } } : s;
-          });
+          if (backdropTransitionMs > 0) {
+            this.slideshowState.update(s => {
+              const current = s[elementId];
+              return current ? {...s, [elementId]: { ...current, fade: true, resetting: false, sceneFade: false } } : s;
+            });
+          } else {
+            this.scheduleSlideshowFrameSwap(elementId, linkedTimeline.outMs > 0 ? linkedTimeline.outMs + 30 : 0, runToken);
+          }
           this.cdr.detectChanges();
-          this.scheduleSlideshowCompletion(elementId, transitionMs + 50, runToken, () => {
+          this.scheduleSlideshowCompletion(elementId, handoffMs + 50, runToken, () => {
             isAdvancing = false;
             scheduleNextSlide();
-          });
+          }, backdropTransitionMs > 0);
         });
     };
 
@@ -4996,23 +5538,87 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         });
     }
 
-    function updateLinkedGroup(group, item, sourceElement) {
-        if (!group || !item) return;
-        getLinkedTargets(group, sourceElement).forEach(target => renderElement(target, item));
+    function getLinkedHandoffTimeline(group, sourceElement) {
+        const targets = getLinkedTargets(group, sourceElement);
+        const outMs = targets.reduce((maxTotal, target) => Math.max(maxTotal, getElementTransitionTotal(target, 'out')), 0);
+        const inMs = targets.reduce((maxTotal, target) => Math.max(maxTotal, getElementTransitionTotal(target, 'in')), 0);
+        return {
+            targets,
+            outMs,
+            inMs,
+            total: outMs > 0 ? outMs + inMs + 30 : inMs
+        };
     }
 
-    function restartElementTransition(el) {
-        const animation = el && el.dataset ? el.dataset.transitionAnimation : '';
+    function updateLinkedGroup(group, item, sourceElement, staged) {
+        if (!group || !item) return 0;
+        return renderElementGroup(getLinkedTargets(group, sourceElement), item, !!staged);
+    }
+
+    function getElementTransitionTotal(el, phase) {
+        if (!el || !el.dataset) return 0;
+        const suffix = phase === 'out' ? 'Out' : 'In';
+        const duration = Math.max(0, Math.min(10000, Number(el.dataset['transition' + suffix + 'Duration'] || el.dataset.transitionDuration) || 0));
+        const delay = Math.max(0, Math.min(10000, Number(el.dataset['transition' + suffix + 'Delay'] || el.dataset.transitionDelay) || 0));
+        const animation = phase === 'out'
+            ? (el.dataset.transitionOutAnimation || el.dataset.transitionExitAnimation || '')
+            : (el.dataset.transitionInAnimation || el.dataset.transitionAnimation || '');
+        if (!animation) return 0;
+        return duration + delay;
+    }
+
+    function playElementAnimation(el, animation) {
         if (!animation) return;
         el.style.animation = 'none';
         void el.offsetWidth;
         el.style.animation = animation;
     }
 
+    function restartElementTransition(el) {
+        const animation = el && el.dataset ? (el.dataset.transitionInAnimation || el.dataset.transitionAnimation || '') : '';
+        playElementAnimation(el, animation);
+    }
+
+    function playElementExitTransition(el) {
+        const animation = el && el.dataset ? (el.dataset.transitionOutAnimation || el.dataset.transitionExitAnimation || '') : '';
+        playElementAnimation(el, animation);
+    }
+
+    function shouldStageElement(el) {
+        const type = el && el.dataset ? el.dataset.type : '';
+        return type !== 'tmdb-backdrop' && type !== 'tmdb-backdrop-slideshow' && type !== 'tmdb-poster-scroll';
+    }
+
+    function renderElementGroup(targets, data, staged) {
+        if (!Array.isArray(targets) || targets.length === 0 || !data) return 0;
+        if (!staged) {
+            return targets.reduce((maxTotal, target) => Math.max(maxTotal, renderElement(target, data, false) || 0), 0);
+        }
+
+        const stagedTargets = targets.filter(shouldStageElement);
+        const immediateTargets = targets.filter(target => !shouldStageElement(target));
+        const outMs = stagedTargets.reduce((maxTotal, target) => Math.max(maxTotal, getElementTransitionTotal(target, 'out')), 0);
+        const inMs = stagedTargets.reduce((maxTotal, target) => Math.max(maxTotal, getElementTransitionTotal(target, 'in')), 0);
+        const immediateMs = immediateTargets.reduce((maxTotal, target) => Math.max(maxTotal, renderElement(target, data, false) || 0), 0);
+
+        if (outMs <= 0) {
+            stagedTargets.forEach(target => renderElement(target, data, false));
+            return Math.max(immediateMs, inMs);
+        }
+
+        stagedTargets.forEach(target => {
+            if (getElementTransitionTotal(target, 'out') > 0) playElementExitTransition(target);
+        });
+        setTimeout(() => {
+            stagedTargets.forEach(target => renderElement(target, data, false));
+        }, outMs + 30);
+        return Math.max(immediateMs, outMs + inMs + 30);
+    }
+
     function getBackdropLayerTransitionSettings(el) {
-        const effect = el.dataset.transitionEffect || 'none';
-        const duration = Math.max(0, Math.min(10000, Number(el.dataset.transitionDuration) || 0));
-        const delay = Math.max(0, Math.min(10000, Number(el.dataset.transitionDelay) || 0));
+        const effect = el.dataset.transitionInEffect || el.dataset.transitionEffect || 'none';
+        const duration = Math.max(0, Math.min(10000, Number(el.dataset.transitionInDuration || el.dataset.transitionDuration) || 0));
+        const delay = Math.max(0, Math.min(10000, Number(el.dataset.transitionInDelay || el.dataset.transitionDelay) || 0));
         const useTransition = effect !== 'none' && duration > 0;
         return {
             effect,
@@ -5210,9 +5816,9 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         if (results.length === 0) return;
         const fallbackType = data.__collectionType || el.dataset.itemType || 'movie';
         const slideshowDuration = Math.max(1000, Math.min(60000, Number(el.dataset.slideshowDuration) || 5000));
-        const transitionEffect = el.dataset.transitionEffect || 'none';
-        const transitionDuration = Math.max(0, Math.min(10000, Number(el.dataset.transitionDuration) || 0));
-        const transitionDelay = Math.max(0, Math.min(10000, Number(el.dataset.transitionDelay) || 0));
+        const transitionEffect = el.dataset.transitionInEffect || el.dataset.transitionEffect || 'none';
+        const transitionDuration = Math.max(0, Math.min(10000, Number(el.dataset.transitionInDuration || el.dataset.transitionDuration) || 0));
+        const transitionDelay = Math.max(0, Math.min(10000, Number(el.dataset.transitionInDelay || el.dataset.transitionDelay) || 0));
         const useTransition = transitionEffect !== 'none' && transitionDuration > 0;
         const transitionTotal = transitionDuration + transitionDelay;
         const transitionCss = useTransition
@@ -5255,9 +5861,9 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
             frame.style.backgroundImage = url ? 'url(' + url + ')' : '';
         }
 
-        function updateLinked(index) {
+        function updateLinked(index, staged) {
             const item = results[index];
-            updateLinkedGroup(el.dataset.linkGroup, detailForCollectionItem(data, item, fallbackType), el);
+            return updateLinkedGroup(el.dataset.linkGroup, detailForCollectionItem(data, item, fallbackType), el, !!staged);
         }
 
 	        function preloadNext() {
@@ -5339,14 +5945,19 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
                 transitioning = true;
 
                 preloadImage(getBackdropUrl(results[nextIdx])).then(() => {
-                    updateLinked(nextIdx);
+                    const linkedTimeline = getLinkedHandoffTimeline(el.dataset.linkGroup, el);
+                    const linkedHandoffMs = updateLinked(nextIdx, true) || 0;
 
                     if (!useTransition) {
-                        currentIdx = nextIdx;
-                        setFrame(currentFrame, results[currentIdx]);
-                        preloadNext();
-                        transitioning = false;
-                        scheduleNextSlide();
+                        setTimeout(() => {
+                            currentIdx = nextIdx;
+                            setFrame(currentFrame, results[currentIdx]);
+                            preloadNext();
+                        }, linkedTimeline.outMs > 0 ? linkedTimeline.outMs + 30 : 0);
+                        setTimeout(() => {
+                            transitioning = false;
+                            scheduleNextSlide();
+                        }, Math.max(linkedHandoffMs, linkedTimeline.outMs > 0 ? linkedTimeline.outMs + 30 : 0));
                         return;
                     }
 
@@ -5361,7 +5972,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
                         preloadNext();
                         transitioning = false;
                         scheduleNextSlide();
-                    }, transitionTotal + 50);
+                    }, Math.max(transitionTotal, linkedHandoffMs) + 50);
                 });
             }
 
@@ -5384,35 +5995,53 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
         const state = { index: 0, timer: null };
         globalSlideshows.set(sourceId, state);
 
-        function renderSlide(index) {
+        function renderSlide(index, staged) {
             const item = detailForCollectionItem(data, results[index], fallbackType);
-            getGlobalSlideshowTargets(sourceId).forEach(target => renderElement(target, item));
+            return renderElementGroup(getGlobalSlideshowTargets(sourceId), item, !!staged);
         }
 
-        renderSlide(0);
+        renderSlide(0, false);
 
         if (results.length > 1) {
-            state.timer = setInterval(() => {
+            function scheduleNext(wait) {
+                if (state.timer) clearTimeout(state.timer);
+                state.timer = setTimeout(advanceSlide, wait);
+            }
+
+            function advanceSlide() {
                 state.index = (state.index + 1) % results.length;
-                renderSlide(state.index);
-            }, duration);
+                const handoffMs = renderSlide(state.index, true) || 0;
+                scheduleNext(duration + handoffMs);
+            }
+
+            scheduleNext(duration);
         }
     }
 
-    function renderElement(el, data) {
-        if (!el || !data) return;
+    function renderElement(el, data, staged) {
+        if (!el || !data) return 0;
         const type = el.dataset.type;
         const imageFit = el.dataset.imageFit || 'cover';
         const collectionResults = Array.isArray(data.results) ? data.results : null;
         const item = collectionResults ? detailForCollectionItem(data, collectionResults[0], data.__collectionType || el.dataset.itemType) : data;
 
+        if (staged && type !== 'tmdb-backdrop' && type !== 'tmdb-backdrop-slideshow' && type !== 'tmdb-poster-scroll') {
+            const outTotal = getElementTransitionTotal(el, 'out');
+            const inTotal = getElementTransitionTotal(el, 'in');
+            if (outTotal > 0) {
+                playElementExitTransition(el);
+                setTimeout(() => renderElement(el, data, false), outTotal + 30);
+                return outTotal + inTotal + 30;
+            }
+        }
+
         if (type === 'tmdb-poster-scroll') {
             renderPosterScroll(el, data);
             restartElementTransition(el);
-            return;
+            return getElementTransitionTotal(el, 'in');
         }
         if (type === 'tmdb-backdrop-slideshow') return renderBackdropSlideshow(el, data);
-        if (!item) return;
+        if (!item) return 0;
 
         switch (type) {
             case 'tmdb-dynamic-field': {
@@ -5424,12 +6053,8 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
                 appendImage(el, item.poster_path ? baseImgUrl + item.poster_path : '', 'Poster', imageFit);
                 break;
             case 'tmdb-backdrop':
-                if (el.dataset.globalSlideshow === 'true') {
-                    renderGlobalBackdrop(el, item, imageFit);
-                    return;
-                }
-                appendImage(el, item.backdrop_path ? baseBackdropUrl + item.backdrop_path : '', 'Backdrop', imageFit);
-                break;
+                renderGlobalBackdrop(el, item, imageFit);
+                return getBackdropLayerTransitionSettings(el).useTransition ? getBackdropLayerTransitionSettings(el).total : getElementTransitionTotal(el, 'in');
             case 'tmdb-logo':
                 const logoUrl = getBestLogo(item.images && item.images.logos, document.documentElement.lang || 'en');
                 if (logoUrl) appendImage(el, logoUrl, 'Logo', imageFit);
@@ -5471,6 +6096,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
                 break;
         }
         restartElementTransition(el);
+        return getElementTransitionTotal(el, 'in');
     }
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -5569,6 +6195,7 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
                 `display: flex`,
                 `justify-content: ${justifyContent}`,
                 `align-items: ${alignItems}`,
+                `transform-origin: ${this.getExportElementTransitionOrigin(el, visibleElements)}`,
                 `border-radius: ${this.clampNumber(s.borderRadius, 0, 0, 500)}px`,
                 `border: ${this.clampNumber(s.borderWidth, 0, 0, 100)}px solid ${this.safeCssColor(s.borderColor, '#ffffff')}`,
                 `opacity: ${this.clampNumber(s.opacity, 1, 0, 1)}`,
@@ -5649,12 +6276,25 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
               `data-cast-bubble-size="${this.getCastBubbleSize(el)}"`
             ];
             if (el.type === 'tmdb-cast') attrs.push(`data-cast-count="${this.getCastCount(el)}"`);
-            const transitionAnimation = this.getTransitionAnimationCss(el, visibleElements);
-            if (transitionAnimation) {
-                attrs.push(`data-transition-animation="${this.escapeHtml(transitionAnimation)}"`);
-                attrs.push(`data-transition-effect="${this.escapeHtml(this.getEffectiveTransitionEffect(el, visibleElements))}"`);
-                attrs.push(`data-transition-duration="${this.getEffectiveTransitionDurationMs(el, visibleElements)}"`);
-                attrs.push(`data-transition-delay="${this.getEffectiveTransitionDelayMs(el, visibleElements)}"`);
+            const transitionInAnimation = this.getTransitionAnimationCss(el, visibleElements, false, 'in');
+            const transitionOutAnimation = this.getTransitionAnimationCss(el, visibleElements, false, 'out');
+            if (transitionInAnimation || transitionOutAnimation) {
+                attrs.push(`data-transition-animation="${this.escapeHtml(transitionInAnimation || '')}"`);
+                attrs.push(`data-transition-in-animation="${this.escapeHtml(transitionInAnimation || '')}"`);
+                attrs.push(`data-transition-exit-animation="${this.escapeHtml(transitionOutAnimation || '')}"`);
+                attrs.push(`data-transition-out-animation="${this.escapeHtml(transitionOutAnimation || '')}"`);
+                attrs.push(`data-transition-preset="${this.escapeHtml(this.getEffectiveTransitionPreset(el, visibleElements, 'in'))}"`);
+                attrs.push(`data-transition-in-preset="${this.escapeHtml(this.getEffectiveTransitionPreset(el, visibleElements, 'in'))}"`);
+                attrs.push(`data-transition-out-preset="${this.escapeHtml(this.getEffectiveTransitionPreset(el, visibleElements, 'out'))}"`);
+                attrs.push(`data-transition-effect="${this.escapeHtml(this.getEffectiveTransitionEffect(el, visibleElements, 'in'))}"`);
+                attrs.push(`data-transition-in-effect="${this.escapeHtml(this.getEffectiveTransitionEffect(el, visibleElements, 'in'))}"`);
+                attrs.push(`data-transition-out-effect="${this.escapeHtml(this.getEffectiveTransitionEffect(el, visibleElements, 'out'))}"`);
+                attrs.push(`data-transition-duration="${this.getEffectiveTransitionDurationMs(el, visibleElements, 'in')}"`);
+                attrs.push(`data-transition-delay="${this.getEffectiveTransitionDelayMs(el, visibleElements, 'in')}"`);
+                attrs.push(`data-transition-in-duration="${this.getEffectiveTransitionDurationMs(el, visibleElements, 'in')}"`);
+                attrs.push(`data-transition-in-delay="${this.getEffectiveTransitionDelayMs(el, visibleElements, 'in')}"`);
+                attrs.push(`data-transition-out-duration="${this.getEffectiveTransitionDurationMs(el, visibleElements, 'out')}"`);
+                attrs.push(`data-transition-out-delay="${this.getEffectiveTransitionDelayMs(el, visibleElements, 'out')}"`);
             }
             if (sourceId) attrs.push(`data-source-id="${this.escapeHtml(sourceId)}"`);
             if (el.linkGroup) attrs.push(`data-link-group="${this.escapeHtml(el.linkGroup)}"`);
@@ -5665,9 +6305,18 @@ export class AppComponent implements OnInit, OnDestroy, AfterViewInit {
             if (this.isCollectionElement(el)) attrs.push(`data-collection-limit="${this.getEffectiveCollectionItemLimit(el, visibleElements)}"`);
             if (el.type === 'tmdb-backdrop-slideshow') {
                 attrs.push(`data-slideshow-duration="${this.getEffectiveSlideshowDurationMs(el, visibleElements)}"`);
-                attrs.push(`data-transition-effect="${this.escapeHtml(this.getEffectiveTransitionEffect(el, visibleElements))}"`);
-                attrs.push(`data-transition-duration="${this.getEffectiveTransitionDurationMs(el, visibleElements)}"`);
-                attrs.push(`data-transition-delay="${this.getEffectiveTransitionDelayMs(el, visibleElements)}"`);
+                attrs.push(`data-transition-preset="${this.escapeHtml(this.getEffectiveTransitionPreset(el, visibleElements, 'in'))}"`);
+                attrs.push(`data-transition-in-preset="${this.escapeHtml(this.getEffectiveTransitionPreset(el, visibleElements, 'in'))}"`);
+                attrs.push(`data-transition-out-preset="${this.escapeHtml(this.getEffectiveTransitionPreset(el, visibleElements, 'out'))}"`);
+                attrs.push(`data-transition-effect="${this.escapeHtml(this.getEffectiveTransitionEffect(el, visibleElements, 'in'))}"`);
+                attrs.push(`data-transition-in-effect="${this.escapeHtml(this.getEffectiveTransitionEffect(el, visibleElements, 'in'))}"`);
+                attrs.push(`data-transition-out-effect="${this.escapeHtml(this.getEffectiveTransitionEffect(el, visibleElements, 'out'))}"`);
+                attrs.push(`data-transition-duration="${this.getEffectiveTransitionDurationMs(el, visibleElements, 'in')}"`);
+                attrs.push(`data-transition-delay="${this.getEffectiveTransitionDelayMs(el, visibleElements, 'in')}"`);
+                attrs.push(`data-transition-in-duration="${this.getEffectiveTransitionDurationMs(el, visibleElements, 'in')}"`);
+                attrs.push(`data-transition-in-delay="${this.getEffectiveTransitionDelayMs(el, visibleElements, 'in')}"`);
+                attrs.push(`data-transition-out-duration="${this.getEffectiveTransitionDurationMs(el, visibleElements, 'out')}"`);
+                attrs.push(`data-transition-out-delay="${this.getEffectiveTransitionDelayMs(el, visibleElements, 'out')}"`);
             }
             if (el.type === 'tmdb-dynamic-field') {
                 attrs.push(`data-data-path="${this.escapeHtml(el.dataPath || '')}"`);
@@ -6007,6 +6656,30 @@ if (isset($_GET['tmdb_source'])) {
     @keyframes tmdbBlurIn { from { opacity: 0; filter: blur(10px); } to { opacity: 1; filter: blur(0); } }
     @keyframes tmdbFlipIn { from { opacity: 0; transform: perspective(800px) rotateX(18deg) rotate(var(--element-rotation, 0deg)); } to { opacity: 1; transform: perspective(800px) rotateX(0) rotate(var(--element-rotation, 0deg)); } }
     @keyframes tmdbBounceIn { 0% { opacity: 0; transform: scale(0.92) rotate(var(--element-rotation, 0deg)); } 65% { opacity: 1; transform: scale(1.04) rotate(var(--element-rotation, 0deg)); } 100% { opacity: 1; transform: scale(1) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbSoftFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes tmdbSoftFadeOut { from { opacity: 1; } to { opacity: 0; } }
+    @keyframes tmdbDropRiseIn { from { opacity: 0; transform: translateY(56px) rotate(var(--element-rotation, 0deg)); } to { opacity: 1; transform: translateY(0) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbDropRiseOut { from { opacity: 1; transform: translateY(0) rotate(var(--element-rotation, 0deg)); } to { opacity: 0; transform: translateY(56px) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbPushLeftIn { from { opacity: 0; transform: translateX(64px) rotate(var(--element-rotation, 0deg)); } to { opacity: 1; transform: translateX(0) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbPushLeftOut { from { opacity: 1; transform: translateX(0) rotate(var(--element-rotation, 0deg)); } to { opacity: 0; transform: translateX(-64px) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbPushRightIn { from { opacity: 0; transform: translateX(-64px) rotate(var(--element-rotation, 0deg)); } to { opacity: 1; transform: translateX(0) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbPushRightOut { from { opacity: 1; transform: translateX(0) rotate(var(--element-rotation, 0deg)); } to { opacity: 0; transform: translateX(64px) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbPushUpIn { from { opacity: 0; transform: translateY(56px) rotate(var(--element-rotation, 0deg)); } to { opacity: 1; transform: translateY(0) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbPushUpOut { from { opacity: 1; transform: translateY(0) rotate(var(--element-rotation, 0deg)); } to { opacity: 0; transform: translateY(-56px) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbPushDownIn { from { opacity: 0; transform: translateY(-56px) rotate(var(--element-rotation, 0deg)); } to { opacity: 1; transform: translateY(0) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbPushDownOut { from { opacity: 1; transform: translateY(0) rotate(var(--element-rotation, 0deg)); } to { opacity: 0; transform: translateY(56px) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbBlurLiftIn { from { opacity: 0; filter: blur(14px); transform: translateY(28px) rotate(var(--element-rotation, 0deg)); } to { opacity: 1; filter: blur(0); transform: translateY(0) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbBlurLiftOut { from { opacity: 1; filter: blur(0); transform: translateY(0) rotate(var(--element-rotation, 0deg)); } to { opacity: 0; filter: blur(14px); transform: translateY(-24px) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbZoomPopIn { 0% { opacity: 0; transform: scale(0.86) rotate(var(--element-rotation, 0deg)); } 78% { opacity: 1; transform: scale(1.03) rotate(var(--element-rotation, 0deg)); } 100% { opacity: 1; transform: scale(1) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbZoomPopOut { from { opacity: 1; transform: scale(1) rotate(var(--element-rotation, 0deg)); } to { opacity: 0; transform: scale(0.92) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbCardFlipIn { from { opacity: 0; transform: perspective(900px) rotateX(18deg) translateY(18px) rotate(var(--element-rotation, 0deg)); } to { opacity: 1; transform: perspective(900px) rotateX(0) translateY(0) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbCardFlipOut { from { opacity: 1; transform: perspective(900px) rotateX(0) translateY(0) rotate(var(--element-rotation, 0deg)); } to { opacity: 0; transform: perspective(900px) rotateX(-16deg) translateY(-14px) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbBouncePopIn { 0% { opacity: 0; transform: scale(0.88) rotate(var(--element-rotation, 0deg)); } 64% { opacity: 1; transform: scale(1.07) rotate(var(--element-rotation, 0deg)); } 100% { opacity: 1; transform: scale(1) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbBouncePopOut { from { opacity: 1; transform: scale(1) rotate(var(--element-rotation, 0deg)); } to { opacity: 0; transform: scale(0.9) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbCinematicPushIn { from { opacity: 0; transform: scale(0.96) rotate(var(--element-rotation, 0deg)); } to { opacity: 1; transform: scale(1) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbCinematicPushOut { from { opacity: 1; transform: scale(1) rotate(var(--element-rotation, 0deg)); } to { opacity: 0; transform: scale(1.08) rotate(var(--element-rotation, 0deg)); } }
+    @keyframes tmdbBlurDissolveIn { from { opacity: 0; filter: blur(12px); } to { opacity: 1; filter: blur(0); } }
+    @keyframes tmdbBlurDissolveOut { from { opacity: 1; filter: blur(0); } to { opacity: 0; filter: blur(12px); } }
 
     /* --- Element Styles --- */
 ${cssRules}
